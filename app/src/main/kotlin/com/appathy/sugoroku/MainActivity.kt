@@ -13,24 +13,36 @@ import android.os.Looper
 import android.view.Gravity
 import android.view.View
 import android.view.animation.DecelerateInterpolator
+import android.view.animation.LinearInterpolator
 import android.widget.*
+import kotlin.math.abs
 import kotlin.math.min
+import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * どうぶつすごろく v1.1
- * - 最大4キャラ同時プレイ（操作者1人＋残りはCPU）
- * - CPUの手番は自動でルーレットが回る
- * - ルーレット結果は中央に正立・拡大表示（回転につられない）
+ * どうぶつすごろく v1.2
+ * - 駒の立体表現（足元の楕円影＋手番キャラのジャンプアニメ）
+ * - スピード切替（ふつう/はやい）: ルーレット回転・移動・待ち時間すべて短縮
+ * - イベントマス第一弾: 「nマスすすむ(青)」「nマスもどる(赤)」を盤面に配置
  *
- * フェーズ2フック:
- *   Board.CELL_TYPES … 現在は全て NORMAL。ここにイベント種別を定義する
- *   onLanded(player)  … 停止時に必ず呼ばれる。イベント処理はここに実装する
+ * フェーズ2残り: ITEM(どんぐり), LOSE_TURN(1回休み), EVENT(選択肢) を
+ * Board.CELL_MOVE と同様の仕組みで追加し onLanded() で分岐する
  */
 class MainActivity : Activity() {
 
     data class Chara(val name: String, val resId: Int)
     data class Player(val chara: Chara, val isHuman: Boolean, var position: Int = 0)
+
+    /** スピード設定（はやい=true） */
+    object Speed {
+        var fast = false
+        val spinMs get() = if (fast) 1100L else 2600L
+        val stepMs get() = if (fast) 140L else 300L
+        val resultMs get() = if (fast) 300L else 700L
+        val cpuWaitMs get() = if (fast) 400L else 1000L
+        val eventWaitMs get() = if (fast) 350L else 700L
+    }
 
     private val charas by lazy {
         listOf(
@@ -48,6 +60,7 @@ class MainActivity : Activity() {
     private lateinit var boardView: BoardView
     private lateinit var rouletteView: RouletteView
     private lateinit var statusText: TextView
+    private lateinit var speedButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -196,12 +209,37 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
         ))
 
+        // 凡例＋スピード切替の行
+        val infoRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), 0, dp(12), 0)
+        }
+        infoRow.addView(TextView(this).apply {
+            text = "🔵 すすむ　🔴 もどる"
+            textSize = 13f
+            setTextColor(Color.parseColor("#558B2F"))
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        speedButton = Button(this).apply {
+            textSize = 13f
+            minHeight = 0
+            minimumHeight = 0
+            setPadding(dp(12), dp(6), dp(12), dp(6))
+            updateSpeedLabel()
+            setOnClickListener {
+                Speed.fast = !Speed.fast
+                updateSpeedLabel()
+            }
+        }
+        infoRow.addView(speedButton)
+        root.addView(infoRow)
+
         statusText = TextView(this).apply {
             textSize = 18f
             gravity = Gravity.CENTER
             setTextColor(Color.parseColor("#33691E"))
             typeface = Typeface.DEFAULT_BOLD
-            setPadding(dp(8), dp(8), dp(8), dp(8))
+            setPadding(dp(8), dp(4), dp(8), dp(4))
         }
         root.addView(statusText)
 
@@ -214,6 +252,10 @@ class MainActivity : Activity() {
         startTurn()
     }
 
+    private fun updateSpeedLabel() {
+        speedButton.text = if (Speed.fast) "はやさ: はやい⚡" else "はやさ: ふつう"
+    }
+
     private fun startTurn() {
         val p = players[turn]
         boardView.turnIndex = turn
@@ -224,39 +266,39 @@ class MainActivity : Activity() {
         } else {
             statusText.text = "${p.chara.name}（CPU）のばん…"
             rouletteView.locked = true
-            handler.postDelayed({ rouletteView.autoSpin() }, 1000)
+            handler.postDelayed({ rouletteView.autoSpin() }, Speed.cpuWaitMs)
         }
     }
 
     private fun onRouletteResult(steps: Int) {
         val p = players[turn]
         statusText.text = "${p.chara.name} は「$steps」！"
-        movePiece(p, steps)
+        movePiece(p, steps, fromEvent = false)
     }
 
-    private fun movePiece(p: Player, steps: Int) {
+    /** steps が負なら後退。fromEvent=true のときは停止後にイベントを再発動しない（連鎖なし） */
+    private fun movePiece(p: Player, steps: Int, fromEvent: Boolean) {
         rouletteView.locked = true
-        var remaining = steps
+        val delta = if (steps > 0) 1 else -1
+        var remaining = abs(steps)
         val stepRunnable = object : Runnable {
             override fun run() {
-                if (remaining > 0 && p.position < Board.GOAL_INDEX) {
-                    p.position++
+                val canMove = if (delta > 0) p.position < Board.GOAL_INDEX else p.position > 0
+                if (remaining > 0 && canMove) {
+                    p.position += delta
                     boardView.invalidate()
                     remaining--
-                    handler.postDelayed(this, 300)
+                    handler.postDelayed(this, Speed.stepMs)
                 } else {
-                    onLanded(p)
+                    onLanded(p, fromEvent)
                 }
             }
         }
-        handler.postDelayed(stepRunnable, 300)
+        handler.postDelayed(stepRunnable, Speed.stepMs)
     }
 
-    /**
-     * 停止マス処理（フェーズ2のイベントはここに実装）
-     * 現在はゴール判定のみ。
-     */
-    private fun onLanded(p: Player) {
+    /** 停止マス処理。フェーズ2の追加イベント（どんぐり等）もここに実装する */
+    private fun onLanded(p: Player, fromEvent: Boolean) {
         if (p.position >= Board.GOAL_INDEX) {
             val msg = if (p.isHuman) "きみ（${p.chara.name}）の かち！"
                       else "${p.chara.name}（CPU）が さきに ついちゃった…"
@@ -271,8 +313,14 @@ class MainActivity : Activity() {
                 }
                 .setNegativeButton("タイトルへ") { _, _ -> showTitle() }
                 .show()
+            return
+        }
+        val mv = Board.CELL_MOVE[p.position]
+        if (mv != 0 && !fromEvent) {
+            statusText.text = if (mv > 0) "${p.chara.name} は ${mv}マス すすむ！"
+                              else "${p.chara.name} は ${-mv}マス もどる…"
+            handler.postDelayed({ movePiece(p, mv, fromEvent = true) }, Speed.eventWaitMs)
         } else {
-            // フェーズ2: Board.CELL_TYPES[p.position] に応じてイベント分岐
             turn = (turn + 1) % players.size
             startTurn()
         }
@@ -285,9 +333,19 @@ class MainActivity : Activity() {
         const val CELL_COUNT = COLS * ROWS      // 30マス
         const val GOAL_INDEX = CELL_COUNT - 1   // 29
 
-        enum class CellType { NORMAL /* フェーズ2で追加: ITEM, LOSE_TURN, MOVE, EVENT ... */ }
-
-        val CELL_TYPES = Array(CELL_COUNT) { CellType.NORMAL }
+        /**
+         * イベントマス: 値が +n なら「nマスすすむ」、-n なら「nマスもどる」、0は通常マス。
+         * S(0)とG(29)は必ず0にすること。連鎖なし仕様なので隣接配置もループしない。
+         */
+        val CELL_MOVE = IntArray(CELL_COUNT).apply {
+            this[4] = 2
+            this[8] = -3
+            this[12] = 3
+            this[16] = -2
+            this[20] = 2
+            this[24] = -4
+            this[27] = -3
+        }
     }
 
     class BoardView(context: Context, private val players: List<Player>) : View(context) {
@@ -302,6 +360,8 @@ class MainActivity : Activity() {
             color = Color.parseColor("#A5D6A7"); strokeWidth = 18f; strokeCap = Paint.Cap.ROUND
         }
         private val cellPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FFF8E1") }
+        private val fwdPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#81D4FA") }
+        private val backPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#EF9A9A") }
         private val cellEdge = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#8D6E63"); style = Paint.Style.STROKE; strokeWidth = 5f
         }
@@ -309,6 +369,33 @@ class MainActivity : Activity() {
         private val goalPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FFB74D") }
         private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#5D4037"); textAlign = Paint.Align.CENTER
+        }
+        private val eventTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#263238"); textAlign = Paint.Align.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(70, 0, 0, 0) }
+
+        // 手番キャラのジャンプ用（立体感の演出）
+        private var bounce = 0f
+        private val bounceAnim = ValueAnimator.ofFloat(0f, (Math.PI * 2).toFloat()).apply {
+            duration = 900
+            repeatCount = ValueAnimator.INFINITE
+            interpolator = LinearInterpolator()
+            addUpdateListener {
+                bounce = it.animatedValue as Float
+                invalidate()
+            }
+        }
+
+        override fun onAttachedToWindow() {
+            super.onAttachedToWindow()
+            bounceAnim.start()
+        }
+
+        override fun onDetachedFromWindow() {
+            bounceAnim.cancel()
+            super.onDetachedFromWindow()
         }
 
         override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
@@ -318,6 +405,7 @@ class MainActivity : Activity() {
             val ch = (h - pad * 2) / Board.ROWS
             cellR = min(cw, ch) * 0.38f
             textPaint.textSize = cellR * 0.6f
+            eventTextPaint.textSize = cellR * 0.65f
             // 下の行からスタートし、蛇行（サーペンタイン）で上へ
             for (i in 0 until Board.CELL_COUNT) {
                 val row = i / Board.COLS
@@ -336,21 +424,27 @@ class MainActivity : Activity() {
             }
             for (i in centers.indices) {
                 val p = centers[i]
-                val fill = when (i) {
-                    0 -> startPaint
-                    Board.GOAL_INDEX -> goalPaint
+                val mv = Board.CELL_MOVE[i]
+                val fill = when {
+                    i == 0 -> startPaint
+                    i == Board.GOAL_INDEX -> goalPaint
+                    mv > 0 -> fwdPaint
+                    mv < 0 -> backPaint
                     else -> cellPaint
                 }
                 canvas.drawCircle(p.x, p.y, cellR, fill)
                 canvas.drawCircle(p.x, p.y, cellR, cellEdge)
-                val label = when (i) {
-                    0 -> "S"
-                    Board.GOAL_INDEX -> "G"
-                    else -> "$i"
+                when {
+                    i == 0 -> canvas.drawText("S", p.x, p.y + textPaint.textSize / 3, textPaint)
+                    i == Board.GOAL_INDEX -> canvas.drawText("G", p.x, p.y + textPaint.textSize / 3, textPaint)
+                    mv != 0 -> {
+                        val label = if (mv > 0) "+$mv" else "$mv"
+                        canvas.drawText(label, p.x, p.y + eventTextPaint.textSize / 3, eventTextPaint)
+                    }
+                    else -> canvas.drawText("$i", p.x, p.y + textPaint.textSize / 3, textPaint)
                 }
-                canvas.drawText(label, p.x, p.y + textPaint.textSize / 3, textPaint)
             }
-            // 駒：同じマスに複数いるときは横にずらして描画。手番の駒は大きく＆最後（最前面）に描く
+            // 駒：同じマスに複数いるときは横にずらす。手番の駒は大きく＆ジャンプ＆最前面
             val byCell = players.withIndex().groupBy { it.value.position.coerceIn(0, Board.GOAL_INDEX) }
             for ((cell, group) in byCell) {
                 val c = centers[cell]
@@ -360,9 +454,19 @@ class MainActivity : Activity() {
                     val bmp = bitmaps[entry.value.chara.resId] ?: continue
                     val s = cellR * (if (isTurn) 2.4f else 1.7f)
                     val dx = (slot - (sorted.size - 1) / 2f) * cellR * 0.7f
+                    // 立体感: 手番キャラは上下にふわっとジャンプ、足元に楕円の影
+                    val lift = if (isTurn) (sin(bounce) * 0.5f + 0.5f) * cellR * 0.4f else 0f
+                    val shadowScale = 1f - (lift / (cellR * 0.4f)) * 0.35f
+                    val shadowW = s * 0.42f * shadowScale
+                    val shadowH = s * 0.13f * shadowScale
+                    canvas.drawOval(
+                        c.x + dx - shadowW, c.y + s * 0.02f - shadowH,
+                        c.x + dx + shadowW, c.y + s * 0.02f + shadowH,
+                        shadowPaint
+                    )
                     val dst = RectF(
-                        c.x + dx - s / 2, c.y - s * 0.95f,
-                        c.x + dx + s / 2, c.y + s * 0.05f
+                        c.x + dx - s / 2, c.y - s * 0.95f - lift,
+                        c.x + dx + s / 2, c.y + s * 0.05f - lift
                     )
                     canvas.drawBitmap(bmp, null, dst, null)
                 }
@@ -400,7 +504,6 @@ class MainActivity : Activity() {
         }
         private val pinPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#D32F2F") }
 
-        // 結果表示の拡大アニメ用スケール
         private var resultScale = 1f
 
         init {
@@ -418,9 +521,10 @@ class MainActivity : Activity() {
             // 針(真上)に result のセグメント中心が来る回転角:
             //   セグメントkの中心は上から時計回りに (k-1)*60+30 度 → 330-(k-1)*60 度回すと針の位置に来る
             val from = rotation2
-            val to = from - (from % 360f) + 360f * (5 + Random.nextInt(3)) + (330f - (result - 1) * 60f)
+            val turns = if (Speed.fast) 3 else 5 + Random.nextInt(3)
+            val to = from - (from % 360f) + 360f * turns + (330f - (result - 1) * 60f)
             ValueAnimator.ofFloat(0f, 1f).apply {
-                duration = 2600
+                duration = Speed.spinMs
                 interpolator = DecelerateInterpolator(2.2f)
                 addUpdateListener {
                     rotation2 = from + (to - from) * (it.animatedValue as Float)
@@ -448,7 +552,7 @@ class MainActivity : Activity() {
                 addListener(object : AnimatorListenerAdapter() {
                     override fun onAnimationEnd(a: Animator) {
                         // 大きな数字を見せてから結果を通知
-                        postDelayed({ onResult(result) }, 700)
+                        postDelayed({ onResult(result) }, Speed.resultMs)
                     }
                 })
                 start()
