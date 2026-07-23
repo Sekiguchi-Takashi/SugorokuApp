@@ -18,19 +18,19 @@ import kotlin.math.min
 import kotlin.random.Random
 
 /**
- * どうぶつすごろく v1.0（フェーズ1）
- * - タイトル → キャラ選択 → すごろく盤面
- * - ルーレット(1〜6)をタップで回転 → 駒が1マスずつ進む → ゴール判定
- * - UIは全てプログラマティック（XMLレイアウト不使用・外部依存ゼロ）
+ * どうぶつすごろく v1.1
+ * - 最大4キャラ同時プレイ（操作者1人＋残りはCPU）
+ * - CPUの手番は自動でルーレットが回る
+ * - ルーレット結果は中央に正立・拡大表示（回転につられない）
  *
  * フェーズ2フック:
  *   Board.CELL_TYPES … 現在は全て NORMAL。ここにイベント種別を定義する
- *   onLanded(index)  … 停止時に必ず呼ばれる。イベント処理はここに実装する
+ *   onLanded(player)  … 停止時に必ず呼ばれる。イベント処理はここに実装する
  */
 class MainActivity : Activity() {
 
-    // ---- キャラ定義 ----
     data class Chara(val name: String, val resId: Int)
+    data class Player(val chara: Chara, val isHuman: Boolean, var position: Int = 0)
 
     private val charas by lazy {
         listOf(
@@ -41,7 +41,8 @@ class MainActivity : Activity() {
         )
     }
 
-    private var selected: Chara? = null
+    private val players = ArrayList<Player>()
+    private var turn = 0
     private val handler = Handler(Looper.getMainLooper())
 
     private lateinit var boardView: BoardView
@@ -53,10 +54,16 @@ class MainActivity : Activity() {
         showTitle()
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        handler.removeCallbacksAndMessages(null)
+    }
+
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
     // ---------------- タイトル画面 ----------------
     private fun showTitle() {
+        handler.removeCallbacksAndMessages(null)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -87,6 +94,7 @@ class MainActivity : Activity() {
 
     // ---------------- キャラ選択画面 ----------------
     private fun showCharaSelect() {
+        handler.removeCallbacksAndMessages(null)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
@@ -94,8 +102,8 @@ class MainActivity : Activity() {
             setPadding(dp(16), dp(24), dp(16), dp(16))
         }
         root.addView(TextView(this).apply {
-            text = "キャラクターを えらんでね"
-            textSize = 22f
+            text = "じぶんの キャラクターを えらんでね"
+            textSize = 20f
             setTextColor(Color.parseColor("#33691E"))
             gravity = Gravity.CENTER
             typeface = Typeface.DEFAULT_BOLD
@@ -118,10 +126,7 @@ class MainActivity : Activity() {
                 scaleType = ImageView.ScaleType.FIT_CENTER
                 setBackgroundColor(Color.WHITE)
                 layoutParams = LinearLayout.LayoutParams(cellSize, cellSize)
-                setOnClickListener {
-                    selected = c
-                    showGame()
-                }
+                setOnClickListener { showCountSelect(c) }
             })
             cell.addView(TextView(this).apply {
                 text = c.name
@@ -135,53 +140,112 @@ class MainActivity : Activity() {
         setContentView(ScrollView(this).apply { addView(root) })
     }
 
+    // ---------------- 人数選択画面 ----------------
+    private fun showCountSelect(myChara: Chara) {
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setBackgroundColor(Color.parseColor("#E8F5E9"))
+            setPadding(dp(32), dp(24), dp(32), dp(24))
+        }
+        root.addView(TextView(this).apply {
+            text = "なんびきで あそぶ？"
+            textSize = 22f
+            setTextColor(Color.parseColor("#33691E"))
+            gravity = Gravity.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(0, 0, 0, dp(8))
+        })
+        root.addView(TextView(this).apply {
+            text = "きみは ${myChara.name}！ ほかのなかまは コンピュータだよ"
+            textSize = 14f
+            setTextColor(Color.parseColor("#558B2F"))
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, dp(16))
+        })
+        val others = charas.filter { it != myChara }
+        for (n in 1..4) {
+            val label = if (n == 1) "ひとりで あそぶ" else "${n}ひきで あそぶ（CPU ${n - 1}ひき）"
+            root.addView(Button(this).apply {
+                text = label
+                textSize = 18f
+                setOnClickListener {
+                    players.clear()
+                    players.add(Player(myChara, isHuman = true))
+                    for (i in 0 until n - 1) players.add(Player(others[i], isHuman = false))
+                    turn = 0
+                    showGame()
+                }
+            }, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(10) })
+        }
+        setContentView(root)
+    }
+
     // ---------------- ゲーム画面 ----------------
     private fun showGame() {
-        val chara = selected ?: return
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.parseColor("#E8F5E9"))
         }
 
-        boardView = BoardView(this, chara.resId)
+        boardView = BoardView(this, players)
         root.addView(boardView, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
         ))
 
         statusText = TextView(this).apply {
-            text = "${chara.name} の ぼうけん！ ルーレットを タップしてね"
-            textSize = 16f
+            textSize = 18f
             gravity = Gravity.CENTER
             setTextColor(Color.parseColor("#33691E"))
+            typeface = Typeface.DEFAULT_BOLD
             setPadding(dp(8), dp(8), dp(8), dp(8))
         }
         root.addView(statusText)
 
         rouletteView = RouletteView(this) { result -> onRouletteResult(result) }
         root.addView(rouletteView, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, dp(220)
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(230)
         ))
 
         setContentView(root)
+        startTurn()
+    }
+
+    private fun startTurn() {
+        val p = players[turn]
+        boardView.turnIndex = turn
+        boardView.invalidate()
+        if (p.isHuman) {
+            statusText.text = "きみ（${p.chara.name}）のばん！ ルーレットを タップ"
+            rouletteView.locked = false
+        } else {
+            statusText.text = "${p.chara.name}（CPU）のばん…"
+            rouletteView.locked = true
+            handler.postDelayed({ rouletteView.autoSpin() }, 1000)
+        }
     }
 
     private fun onRouletteResult(steps: Int) {
-        statusText.text = "「$steps」が でたよ！"
-        movePiece(steps)
+        val p = players[turn]
+        statusText.text = "${p.chara.name} は「$steps」！"
+        movePiece(p, steps)
     }
 
-    private fun movePiece(steps: Int) {
+    private fun movePiece(p: Player, steps: Int) {
         rouletteView.locked = true
         var remaining = steps
         val stepRunnable = object : Runnable {
             override fun run() {
-                if (remaining > 0 && boardView.position < Board.GOAL_INDEX) {
-                    boardView.position++
+                if (remaining > 0 && p.position < Board.GOAL_INDEX) {
+                    p.position++
                     boardView.invalidate()
                     remaining--
                     handler.postDelayed(this, 300)
                 } else {
-                    onLanded(boardView.position)
+                    onLanded(p)
                 }
             }
         }
@@ -192,19 +256,25 @@ class MainActivity : Activity() {
      * 停止マス処理（フェーズ2のイベントはここに実装）
      * 現在はゴール判定のみ。
      */
-    private fun onLanded(index: Int) {
-        if (index >= Board.GOAL_INDEX) {
+    private fun onLanded(p: Player) {
+        if (p.position >= Board.GOAL_INDEX) {
+            val msg = if (p.isHuman) "きみ（${p.chara.name}）の かち！"
+                      else "${p.chara.name}（CPU）が さきに ついちゃった…"
             AlertDialog.Builder(this)
                 .setTitle("🎉 ゴール！")
-                .setMessage("${selected?.name} は もりのおくに たどりついた！")
+                .setMessage(msg)
                 .setCancelable(false)
-                .setPositiveButton("もういちど") { _, _ -> showCharaSelect() }
+                .setPositiveButton("もういちど") { _, _ ->
+                    players.forEach { it.position = 0 }
+                    turn = 0
+                    showGame()
+                }
                 .setNegativeButton("タイトルへ") { _, _ -> showTitle() }
                 .show()
         } else {
-            // フェーズ2: Board.CELL_TYPES[index] に応じてイベント分岐
-            statusText.text = "つぎの ルーレットを まわそう！"
-            rouletteView.locked = false
+            // フェーズ2: Board.CELL_TYPES[p.position] に応じてイベント分岐
+            turn = (turn + 1) % players.size
+            startTurn()
         }
     }
 
@@ -220,10 +290,11 @@ class MainActivity : Activity() {
         val CELL_TYPES = Array(CELL_COUNT) { CellType.NORMAL }
     }
 
-    class BoardView(context: Context, pieceRes: Int) : View(context) {
-        var position = 0
+    class BoardView(context: Context, private val players: List<Player>) : View(context) {
+        var turnIndex = 0
 
-        private val piece: Bitmap = BitmapFactory.decodeResource(resources, pieceRes)
+        private val bitmaps: Map<Int, Bitmap> = players.map { it.chara.resId }.distinct()
+            .associateWith { BitmapFactory.decodeResource(resources, it) }
         private val centers = ArrayList<PointF>(Board.CELL_COUNT)
         private var cellR = 0f
 
@@ -279,11 +350,23 @@ class MainActivity : Activity() {
                 }
                 canvas.drawText(label, p.x, p.y + textPaint.textSize / 3, textPaint)
             }
-            // 駒
-            val p = centers[position.coerceIn(0, Board.GOAL_INDEX)]
-            val s = cellR * 2.4f
-            val dst = RectF(p.x - s / 2, p.y - s * 0.95f, p.x + s / 2, p.y + s * 0.05f)
-            canvas.drawBitmap(piece, null, dst, null)
+            // 駒：同じマスに複数いるときは横にずらして描画。手番の駒は大きく＆最後（最前面）に描く
+            val byCell = players.withIndex().groupBy { it.value.position.coerceIn(0, Board.GOAL_INDEX) }
+            for ((cell, group) in byCell) {
+                val c = centers[cell]
+                val sorted = group.sortedBy { if (it.index == turnIndex) 1 else 0 }
+                for ((slot, entry) in sorted.withIndex()) {
+                    val isTurn = entry.index == turnIndex
+                    val bmp = bitmaps[entry.value.chara.resId] ?: continue
+                    val s = cellR * (if (isTurn) 2.4f else 1.7f)
+                    val dx = (slot - (sorted.size - 1) / 2f) * cellR * 0.7f
+                    val dst = RectF(
+                        c.x + dx - s / 2, c.y - s * 0.95f,
+                        c.x + dx + s / 2, c.y + s * 0.05f
+                    )
+                    canvas.drawBitmap(bmp, null, dst, null)
+                }
+            }
         }
     }
 
@@ -292,6 +375,7 @@ class MainActivity : Activity() {
         var locked = false
         private var rotation2 = 0f
         private var spinning = false
+        private var resultNum: Int? = null
 
         private val colors = intArrayOf(
             Color.parseColor("#EF9A9A"), Color.parseColor("#FFCC80"),
@@ -306,15 +390,30 @@ class MainActivity : Activity() {
             color = Color.parseColor("#37474F"); textAlign = Paint.Align.CENTER
             typeface = Typeface.DEFAULT_BOLD
         }
+        private val resultPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#D32F2F"); textAlign = Paint.Align.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        private val resultBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+        private val resultEdgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#D32F2F"); style = Paint.Style.STROKE; strokeWidth = 8f
+        }
         private val pinPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#D32F2F") }
 
+        // 結果表示の拡大アニメ用スケール
+        private var resultScale = 1f
+
         init {
-            setOnClickListener { spin() }
+            setOnClickListener { if (!locked) spin() }
         }
 
+        /** CPU手番用：ロック状態でも回す */
+        fun autoSpin() = spin()
+
         private fun spin() {
-            if (spinning || locked) return
+            if (spinning) return
             spinning = true
+            resultNum = null
             val result = Random.nextInt(1, 7)
             // 針(真上)に result のセグメント中心が来る回転角:
             //   セグメントkの中心は上から時計回りに (k-1)*60+30 度 → 330-(k-1)*60 度回すと針の位置に来る
@@ -330,7 +429,26 @@ class MainActivity : Activity() {
                 addListener(object : AnimatorListenerAdapter() {
                     override fun onAnimationEnd(a: Animator) {
                         spinning = false
-                        onResult(result)
+                        showResult(result)
+                    }
+                })
+                start()
+            }
+        }
+
+        private fun showResult(result: Int) {
+            resultNum = result
+            // ポンッと拡大して表示
+            ValueAnimator.ofFloat(0.3f, 1.15f, 1f).apply {
+                duration = 350
+                addUpdateListener {
+                    resultScale = it.animatedValue as Float
+                    invalidate()
+                }
+                addListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(a: Animator) {
+                        // 大きな数字を見せてから結果を通知
+                        postDelayed({ onResult(result) }, 700)
                     }
                 })
                 start()
@@ -358,12 +476,6 @@ class MainActivity : Activity() {
             }
             canvas.restore()
 
-            // 中央ボタン風
-            arcPaint.color = Color.WHITE
-            canvas.drawCircle(cx, cy, r * 0.22f, arcPaint)
-            numPaint.textSize = r * 0.16f
-            canvas.drawText(if (spinning) "..." else "TAP", cx, cy + numPaint.textSize / 3, numPaint)
-
             // 針（真上）
             val path = Path().apply {
                 moveTo(cx, cy - r - 6f)
@@ -372,6 +484,22 @@ class MainActivity : Activity() {
                 close()
             }
             canvas.drawPath(path, pinPaint)
+
+            val res = resultNum
+            if (res != null) {
+                // 出た数字を中央に正立・特大で表示（盤の回転につられない）
+                val br = r * 0.46f * resultScale
+                canvas.drawCircle(cx, cy, br, resultBgPaint)
+                canvas.drawCircle(cx, cy, br, resultEdgePaint)
+                resultPaint.textSize = br * 1.2f
+                canvas.drawText("$res", cx, cy + resultPaint.textSize * 0.36f, resultPaint)
+            } else {
+                // 中央ボタン風
+                arcPaint.color = Color.WHITE
+                canvas.drawCircle(cx, cy, r * 0.22f, arcPaint)
+                numPaint.textSize = r * 0.16f
+                canvas.drawText(if (spinning) "..." else "TAP", cx, cy + numPaint.textSize / 3, numPaint)
+            }
         }
     }
 }
