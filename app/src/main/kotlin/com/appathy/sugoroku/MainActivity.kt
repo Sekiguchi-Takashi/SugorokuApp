@@ -225,12 +225,12 @@ class MainActivity : Activity() {
             minHeight = 0
             minimumHeight = 0
             setPadding(dp(12), dp(6), dp(12), dp(6))
-            updateSpeedLabel()
             setOnClickListener {
                 Speed.fast = !Speed.fast
                 updateSpeedLabel()
             }
         }
+        updateSpeedLabel()
         infoRow.addView(speedButton)
         root.addView(infoRow)
 
