@@ -12,6 +12,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.LinearInterpolator
@@ -22,13 +23,12 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * どうぶつすごろく v2.0（フェーズ2開始）
- * - キャラ画像を透過切り抜き済み（白背景なし）
- * - 盤面を左→右の直線レーンに変更・マス拡大・横スクロール
- *   手番プレイヤーが常に画面中央（遅れているプレイヤーの番はゆっくり戻る）
- * - レイアウト刷新: 上半分=盤面 / ルーレット左寄せ / 右にスタート(オレンジ)＋ステータスボタン
- *   最下部に細いステータスバー（満腹・充実・友情、最大999）
- * - イベント第1弾: 6マス目「こうえん」= 公園写真＋キャラ合成＋メッセージ枠、充実+10
+ * どうぶつすごろく v2.1
+ * - マスを縮小し画面に約3マス表示（spacing = 幅/3）
+ * - 盤面上部にS→G全体ミニマップ（マス種別色＋全キャラ位置）
+ * - 自分の番は盤面を左右スライドで前後確認可。スタートで自位置に戻ってからルーレット
+ * - イベント汎用化: EVENTS マップに 背景/メッセージ/ステータス変化/登場匹数 を定義
+ *   4マス目「うみ」(みんなで海へ行った。満腹+5 友情+10、3匹登場) / 6マス目「こうえん」(充実+10)
  */
 class MainActivity : Activity() {
 
@@ -36,6 +36,16 @@ class MainActivity : Activity() {
     data class Player(
         val chara: Chara, val isHuman: Boolean, var position: Int = 0,
         var manpuku: Int = 0, var juujitsu: Int = 0, var yuujou: Int = 0
+    )
+
+    /** イベント定義: 背景・メッセージ・ステータス変化・登場するどうぶつの数（本人含む） */
+    data class GameEvent(
+        val bgRes: Int,
+        val message: String,
+        val dManpuku: Int = 0,
+        val dJuujitsu: Int = 0,
+        val dYuujou: Int = 0,
+        val groupSize: Int = 1
     )
 
     object Speed {
@@ -56,6 +66,21 @@ class MainActivity : Activity() {
         )
     }
 
+    private val events by lazy {
+        mapOf(
+            4 to GameEvent(
+                R.drawable.bg_beach,
+                "みんなで海へ行った。\n満腹5　友情10",
+                dManpuku = 5, dYuujou = 10, groupSize = 3
+            ),
+            6 to GameEvent(
+                R.drawable.bg_park,
+                "今回は\n公園で楽しく遊んだ。充実が10",
+                dJuujitsu = 10, groupSize = 1
+            )
+        )
+    }
+
     private val players = ArrayList<Player>()
     private var turn = 0
     private val handler = Handler(Looper.getMainLooper())
@@ -69,6 +94,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Board.eventCells = events.keys
         showTitle()
     }
 
@@ -216,13 +242,11 @@ class MainActivity : Activity() {
             setBackgroundColor(Color.parseColor("#E8F5E9"))
         }
 
-        // 上半分: スクロール盤面
         boardView = BoardView(this, players)
         root.addView(boardView, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
         ))
 
-        // 凡例＋スピード切替
         val infoRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -256,7 +280,6 @@ class MainActivity : Activity() {
         }
         root.addView(statusText)
 
-        // ルーレット(左) ＋ 操作ボタン(右)
         val controlRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(8), 0, dp(8), dp(4))
@@ -295,7 +318,6 @@ class MainActivity : Activity() {
             .apply { gravity = Gravity.CENTER_VERTICAL })
         root.addView(controlRow)
 
-        // 最下部: 細いステータスバー
         statsBar = TextView(this).apply {
             textSize = 13f
             gravity = Gravity.CENTER
@@ -335,25 +357,28 @@ class MainActivity : Activity() {
 
     private fun onStartPressed() {
         val p = players[turn]
-        if (p.isHuman && !rouletteView.locked) {
-            rouletteView.autoSpin()
-            startButton.isEnabled = false
-        }
+        if (!p.isHuman || rouletteView.locked) return
+        startButton.isEnabled = false
+        boardView.panEnabled = false
+        // スライドで見ていた位置から自分の位置へ戻ってから回す
+        boardView.focusCell(p.position, slow = false)
+        handler.postDelayed({ rouletteView.autoSpin() }, 380)
     }
 
     private fun startTurn() {
         val p = players[turn]
         boardView.turnIndex = turn
-        // 手番プレイヤーの位置へスクロール。後ろのプレイヤーへは"ゆっくり"戻る
         boardView.focusCell(p.position, slow = true)
         if (p.isHuman) {
             statusText.text = "きみ（${p.chara.name}）のばん！ スタートを おしてね"
             rouletteView.locked = false
             startButton.isEnabled = true
+            boardView.panEnabled = true   // 前後の状況をスライドで確認できる
         } else {
             statusText.text = "${p.chara.name}（CPU）のばん…"
             rouletteView.locked = true
             startButton.isEnabled = false
+            boardView.panEnabled = false
             handler.postDelayed({ rouletteView.autoSpin() }, Speed.cpuWaitMs)
         }
     }
@@ -368,6 +393,7 @@ class MainActivity : Activity() {
     private fun movePiece(p: Player, steps: Int, fromEvent: Boolean) {
         rouletteView.locked = true
         startButton.isEnabled = false
+        boardView.panEnabled = false
         val delta = if (steps > 0) 1 else -1
         var remaining = abs(steps)
         val stepRunnable = object : Runnable {
@@ -410,8 +436,9 @@ class MainActivity : Activity() {
                 .show()
             return
         }
-        if (Board.CELL_EVENT[p.position] && !fromEvent) {
-            showParkEvent(p)
+        val ev = events[p.position]
+        if (ev != null && !fromEvent) {
+            showEvent(p, ev)
             return
         }
         val mv = Board.CELL_MOVE[p.position]
@@ -424,30 +451,48 @@ class MainActivity : Activity() {
         }
     }
 
-    // ---------------- 公園イベント（6マス目） ----------------
-    private fun showParkEvent(p: Player) {
+    // ---------------- イベント表示（汎用） ----------------
+    private fun showEvent(p: Player, ev: GameEvent) {
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), dp(12), dp(12), dp(12))
         }
-        // 写真＋入ったキャラを左下に合成表示
         val frame = FrameLayout(this)
         frame.addView(ImageView(this).apply {
-            setImageResource(R.drawable.bg_park)
+            setImageResource(ev.bgRes)
             scaleType = ImageView.ScaleType.FIT_CENTER
             adjustViewBounds = true
         }, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT
         ))
+        // 登場するどうぶつ: 本人＋他のキャラから (groupSize-1) 匹
+        val friends = charas.filter { it != p.chara }.take((ev.groupSize - 1).coerceAtLeast(0))
+        if (friends.size >= 1) {
+            frame.addView(ImageView(this).apply {
+                setImageResource(friends[0].resId)
+                rotation = -10f
+            }, FrameLayout.LayoutParams(dp(84), dp(84), Gravity.BOTTOM or Gravity.START).apply {
+                leftMargin = dp(10); bottomMargin = dp(20)
+            })
+        }
         frame.addView(ImageView(this).apply {
             setImageResource(p.chara.resId)
-        }, FrameLayout.LayoutParams(dp(100), dp(100), Gravity.BOTTOM or Gravity.START).apply {
-            leftMargin = dp(12); bottomMargin = dp(12)
+            rotation = 4f
+        }, FrameLayout.LayoutParams(dp(108), dp(108),
+            Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
+            bottomMargin = dp(10)
         })
+        if (friends.size >= 2) {
+            frame.addView(ImageView(this).apply {
+                setImageResource(friends[1].resId)
+                rotation = 10f
+            }, FrameLayout.LayoutParams(dp(84), dp(84), Gravity.BOTTOM or Gravity.END).apply {
+                rightMargin = dp(10); bottomMargin = dp(24)
+            })
+        }
         content.addView(frame)
-        // メッセージ枠
         content.addView(TextView(this).apply {
-            text = "今回は\n公園で楽しく遊んだ。充実が10"
+            text = ev.message
             textSize = 16f
             setTextColor(Color.parseColor("#263238"))
             setPadding(dp(14), dp(12), dp(14), dp(12))
@@ -460,7 +505,9 @@ class MainActivity : Activity() {
             .setView(ScrollView(this).apply { addView(content) })
             .setCancelable(false)
             .setPositiveButton("OK") { _, _ ->
-                p.juujitsu = min(999, p.juujitsu + 10)
+                p.manpuku = min(999, p.manpuku + ev.dManpuku)
+                p.juujitsu = min(999, p.juujitsu + ev.dJuujitsu)
+                p.yuujou = min(999, p.yuujou + ev.dYuujou)
                 updateStatsBar()
                 nextTurn()
             }
@@ -472,10 +519,10 @@ class MainActivity : Activity() {
         const val CELL_COUNT = 30
         const val GOAL_INDEX = CELL_COUNT - 1   // 29
 
-        /** +n=「nマスすすむ」(青) / -n=「nマスもどる」(赤) / 0=通常。S(0),G(29),イベントマスは0 */
+        /** +n=「nマスすすむ」(青) / -n=「nマスもどる」(赤) / 0=通常。S/G/イベントマスは0 */
         val CELL_MOVE = IntArray(CELL_COUNT).apply {
-            this[4] = 2
             this[8] = -3
+            this[10] = 2
             this[12] = 3
             this[16] = -2
             this[20] = 2
@@ -483,34 +530,33 @@ class MainActivity : Activity() {
             this[27] = -3
         }
 
-        /** イベントマス（現在は6マス目の「こうえん」のみ。追加はここに） */
-        val CELL_EVENT = BooleanArray(CELL_COUNT).apply {
-            this[6] = true
-        }
+        /** イベントマス位置（MainActivity.events のキーから設定される） */
+        var eventCells: Set<Int> = emptySet()
     }
 
     class BoardView(context: Context, private val players: List<Player>) : View(context) {
         var turnIndex = 0
+        var panEnabled = false
 
         private val bitmaps: Map<Int, Bitmap> = players.map { it.chara.resId }.distinct()
             .associateWith { BitmapFactory.decodeResource(resources, it) }
 
-        // カメラ（画面中央に映すワールドX座標）
         private var camX = 0f
         private var camAnim: ValueAnimator? = null
         private var spacing = 0f
         private var cellR = 0f
         private var laneY = 0f
+        private var lastTouchX = 0f
 
         private val pathPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#A5D6A7"); strokeWidth = 26f; strokeCap = Paint.Cap.ROUND
+            color = Color.parseColor("#A5D6A7"); strokeWidth = 22f; strokeCap = Paint.Cap.ROUND
         }
         private val cellPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FFF8E1") }
         private val fwdPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#81D4FA") }
         private val backPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#EF9A9A") }
         private val eventPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#CE93D8") }
         private val cellEdge = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#8D6E63"); style = Paint.Style.STROKE; strokeWidth = 6f
+            color = Color.parseColor("#8D6E63"); style = Paint.Style.STROKE; strokeWidth = 5f
         }
         private val startPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#81C784") }
         private val goalPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FFB74D") }
@@ -522,6 +568,14 @@ class MainActivity : Activity() {
             typeface = Typeface.DEFAULT_BOLD
         }
         private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(70, 0, 0, 0) }
+        private val mapBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(220, 255, 255, 255) }
+        private val mapEdgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#8D6E63"); style = Paint.Style.STROKE; strokeWidth = 4f
+        }
+        private val mapLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#A5D6A7"); strokeWidth = 6f; strokeCap = Paint.Cap.ROUND
+        }
+        private val mapCellPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 
         private var bounce = 0f
         private val bounceAnim = ValueAnimator.ofFloat(0f, (Math.PI * 2).toFloat()).apply {
@@ -547,7 +601,7 @@ class MainActivity : Activity() {
 
         private fun worldX(i: Int) = spacing * i
 
-        /** 指定マスを画面中央へ。slow=true はゆっくり戻る演出 */
+        /** 指定マスを画面中央へ。slow=true は後方プレイヤーへゆっくり戻る演出 */
         fun focusCell(i: Int, slow: Boolean) {
             val target = worldX(i)
             camAnim?.cancel()
@@ -562,23 +616,57 @@ class MainActivity : Activity() {
             }
         }
 
+        /** 自分の番のあいだだけ左右スライドで前後を確認できる */
+        override fun onTouchEvent(e: MotionEvent): Boolean {
+            if (!panEnabled) return false
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    camAnim?.cancel()
+                    lastTouchX = e.x
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    camX = (camX - (e.x - lastTouchX))
+                        .coerceIn(0f, worldX(Board.GOAL_INDEX))
+                    lastTouchX = e.x
+                    invalidate()
+                }
+            }
+            return true
+        }
+
         override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
-            // 直線レーン: マスを大きく
-            cellR = h * 0.16f
-            spacing = cellR * 2.6f
-            laneY = h * 0.62f
+            // 画面に約3マス見えるサイズ
+            spacing = w / 3f
+            cellR = spacing * 0.27f
+            laneY = h * 0.72f
             textPaint.textSize = cellR * 0.62f
-            eventTextPaint.textSize = cellR * 0.66f
+            eventTextPaint.textSize = cellR * 0.62f
             camX = worldX(players.getOrNull(turnIndex)?.position ?: 0)
         }
 
         override fun onDraw(canvas: Canvas) {
             if (spacing == 0f) return
+            drawTrack(canvas)
+            drawMiniMap(canvas)
+        }
+
+        private fun cellFill(i: Int): Paint {
+            val mv = Board.CELL_MOVE[i]
+            return when {
+                i == 0 -> startPaint
+                i == Board.GOAL_INDEX -> goalPaint
+                i in Board.eventCells -> eventPaint
+                mv > 0 -> fwdPaint
+                mv < 0 -> backPaint
+                else -> cellPaint
+            }
+        }
+
+        private fun drawTrack(canvas: Canvas) {
             val dx = width / 2f - camX
             canvas.save()
             canvas.translate(dx, 0f)
 
-            // 見える範囲のマスだけ描画
             val first = (((camX - width) / spacing).toInt() - 1).coerceIn(0, Board.CELL_COUNT - 1)
             val last = (((camX + width) / spacing).toInt() + 1).coerceIn(0, Board.CELL_COUNT - 1)
 
@@ -587,26 +675,17 @@ class MainActivity : Activity() {
             for (i in first..last) {
                 val x = worldX(i)
                 val mv = Board.CELL_MOVE[i]
-                val fill = when {
-                    i == 0 -> startPaint
-                    i == Board.GOAL_INDEX -> goalPaint
-                    Board.CELL_EVENT[i] -> eventPaint
-                    mv > 0 -> fwdPaint
-                    mv < 0 -> backPaint
-                    else -> cellPaint
-                }
-                canvas.drawCircle(x, laneY, cellR, fill)
+                canvas.drawCircle(x, laneY, cellR, cellFill(i))
                 canvas.drawCircle(x, laneY, cellR, cellEdge)
                 when {
                     i == 0 -> canvas.drawText("S", x, laneY + textPaint.textSize / 3, textPaint)
                     i == Board.GOAL_INDEX -> canvas.drawText("G", x, laneY + textPaint.textSize / 3, textPaint)
-                    Board.CELL_EVENT[i] -> canvas.drawText("⭐", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
+                    i in Board.eventCells -> canvas.drawText("⭐", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
                     mv != 0 -> canvas.drawText(if (mv > 0) "+$mv" else "$mv", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
                     else -> canvas.drawText("$i", x, laneY + textPaint.textSize / 3, textPaint)
                 }
             }
 
-            // 駒: 同マスは横ずらし、手番は大きく＆ジャンプ＆最前面、足元に影
             val byCell = players.withIndex().groupBy { it.value.position.coerceIn(0, Board.GOAL_INDEX) }
             for ((cell, group) in byCell) {
                 if (cell < first - 1 || cell > last + 1) continue
@@ -615,18 +694,18 @@ class MainActivity : Activity() {
                 for ((slot, entry) in sorted.withIndex()) {
                     val isTurn = entry.index == turnIndex
                     val bmp = bitmaps[entry.value.chara.resId] ?: continue
-                    val s = cellR * (if (isTurn) 2.6f else 1.9f)
+                    val s = cellR * (if (isTurn) 2.5f else 1.8f)
                     val pieceDx = (slot - (sorted.size - 1) / 2f) * cellR * 0.8f
                     val lift = if (isTurn) (sin(bounce) * 0.5f + 0.5f) * cellR * 0.4f else 0f
                     val shadowScale = 1f - (lift / (cellR * 0.4f)) * 0.35f
                     val shadowW = s * 0.40f * shadowScale
                     val shadowH = s * 0.12f * shadowScale
+                    val baseY = laneY - cellR * 0.55f
                     canvas.drawOval(
-                        cx + pieceDx - shadowW, laneY - cellR * 0.55f - shadowH,
-                        cx + pieceDx + shadowW, laneY - cellR * 0.55f + shadowH,
+                        cx + pieceDx - shadowW, baseY - shadowH,
+                        cx + pieceDx + shadowW, baseY + shadowH,
                         shadowPaint
                     )
-                    val baseY = laneY - cellR * 0.55f
                     val dst = RectF(
                         cx + pieceDx - s / 2, baseY - s - lift,
                         cx + pieceDx + s / 2, baseY - lift
@@ -635,6 +714,48 @@ class MainActivity : Activity() {
                 }
             }
             canvas.restore()
+        }
+
+        /** 上部: スタート→ゴール全体が見えるミニマップ */
+        private fun drawMiniMap(canvas: Canvas) {
+            val frameL = width * 0.03f
+            val frameR = width * 0.97f
+            val frameT = height * 0.04f
+            val frameB = height * 0.34f
+            val rect = RectF(frameL, frameT, frameR, frameB)
+            canvas.drawRoundRect(rect, 18f, 18f, mapBgPaint)
+            canvas.drawRoundRect(rect, 18f, 18f, mapEdgePaint)
+
+            val padX = width * 0.045f
+            val l = frameL + padX
+            val r = frameR - padX
+            val lineY = frameT + (frameB - frameT) * 0.68f
+            canvas.drawLine(l, lineY, r, lineY, mapLinePaint)
+
+            val miniR = (frameB - frameT) * 0.085f
+            for (i in 0 until Board.CELL_COUNT) {
+                val x = l + (r - l) * i / (Board.CELL_COUNT - 1)
+                mapCellPaint.color = cellFill(i).color
+                canvas.drawCircle(x, lineY, miniR, mapCellPaint)
+            }
+
+            // 全キャラの現在位置（手番キャラは大きめ）
+            val byCell = players.withIndex().groupBy { it.value.position.coerceIn(0, Board.GOAL_INDEX) }
+            for ((cell, group) in byCell) {
+                val x = l + (r - l) * cell / (Board.CELL_COUNT - 1)
+                val sorted = group.sortedBy { if (it.index == turnIndex) 1 else 0 }
+                for ((slot, entry) in sorted.withIndex()) {
+                    val bmp = bitmaps[entry.value.chara.resId] ?: continue
+                    val isTurn = entry.index == turnIndex
+                    val s = (frameB - frameT) * (if (isTurn) 0.46f else 0.34f)
+                    val ddx = (slot - (sorted.size - 1) / 2f) * s * 0.35f
+                    val dst = RectF(
+                        x + ddx - s / 2, lineY - miniR * 1.6f - s,
+                        x + ddx + s / 2, lineY - miniR * 1.6f
+                    )
+                    canvas.drawBitmap(bmp, null, dst, null)
+                }
+            }
         }
     }
 
