@@ -66,8 +66,14 @@ class MainActivity : Activity() {
         )
     }
 
+    /** イベント配置（CELL_MOVE のマスとは重複させないこと） */
     private val events by lazy {
         mapOf(
+            2 to GameEvent(
+                R.drawable.bg_famiresu,
+                "レストランななで ごはんを食べた。\n満腹15　友情5",
+                dManpuku = 15, dYuujou = 5, groupSize = 3
+            ),
             4 to GameEvent(
                 R.drawable.bg_beach,
                 "みんなで海へ行った。\n満腹5　友情10",
@@ -77,6 +83,41 @@ class MainActivity : Activity() {
                 R.drawable.bg_park,
                 "今回は\n公園で楽しく遊んだ。充実が10",
                 dJuujitsu = 10, groupSize = 1
+            ),
+            9 to GameEvent(
+                R.drawable.bg_yasai,
+                "無人野菜販売所で 野菜を買った。\n満腹10　充実5",
+                dManpuku = 10, dJuujitsu = 5, groupSize = 1
+            ),
+            11 to GameEvent(
+                R.drawable.bg_pool,
+                "プールで たくさん泳いだ。\n満腹-5　充実10　友情5",
+                dManpuku = -5, dJuujitsu = 10, dYuujou = 5, groupSize = 3
+            ),
+            13 to GameEvent(
+                R.drawable.bg_library,
+                "図書館で しずかに本を読んだ。\n充実15",
+                dJuujitsu = 15, groupSize = 1
+            ),
+            15 to GameEvent(
+                R.drawable.bg_cafe,
+                "喫茶店ななで ひとやすみ。\n満腹8　充実8",
+                dManpuku = 8, dJuujitsu = 8, groupSize = 2
+            ),
+            18 to GameEvent(
+                R.drawable.bg_ground,
+                "グラウンドで みんなと運動した。\n満腹-5　友情15",
+                dManpuku = -5, dYuujou = 15, groupSize = 4
+            ),
+            22 to GameEvent(
+                R.drawable.bg_cinema,
+                "映画館で 映画を見た。\n充実12　友情8",
+                dJuujitsu = 12, dYuujou = 8, groupSize = 2
+            ),
+            26 to GameEvent(
+                R.drawable.bg_cabin,
+                "山のログハウスに とまった。\n満腹10　充実10　友情10",
+                dManpuku = 10, dJuujitsu = 10, dYuujou = 10, groupSize = 4
             )
         )
     }
@@ -465,31 +506,40 @@ class MainActivity : Activity() {
         }, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT
         ))
-        // 登場するどうぶつ: 本人＋他のキャラから (groupSize-1) 匹
-        val friends = charas.filter { it != p.chara }.take((ev.groupSize - 1).coerceAtLeast(0))
-        if (friends.size >= 1) {
-            frame.addView(ImageView(this).apply {
-                setImageResource(friends[0].resId)
-                rotation = -10f
-            }, FrameLayout.LayoutParams(dp(84), dp(84), Gravity.BOTTOM or Gravity.START).apply {
-                leftMargin = dp(10); bottomMargin = dp(20)
+        // 登場するどうぶつ: 本人＋他のキャラから (groupSize-1) 匹。本人を中央寄りに並べる
+        val friends = charas.filter { it != p.chara }.take((ev.groupSize - 1).coerceIn(0, 3))
+        val lineup = ArrayList<Pair<Chara, Boolean>>()   // Pair(キャラ, 本人か)
+        when (friends.size) {
+            0 -> lineup.add(p.chara to true)
+            1 -> { lineup.add(p.chara to true); lineup.add(friends[0] to false) }
+            2 -> { lineup.add(friends[0] to false); lineup.add(p.chara to true); lineup.add(friends[1] to false) }
+            else -> {
+                lineup.add(friends[0] to false); lineup.add(p.chara to true)
+                lineup.add(friends[1] to false); lineup.add(friends[2] to false)
+            }
+        }
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+        }
+        val friendSize = if (lineup.size >= 4) dp(70) else dp(84)
+        val meSize = if (lineup.size >= 4) dp(92) else dp(108)
+        for ((idx, entry) in lineup.withIndex()) {
+            val (c, isMe) = entry
+            val size = if (isMe) meSize else friendSize
+            row.addView(ImageView(this).apply {
+                setImageResource(c.resId)
+                rotation = if (isMe) 3f else if (idx % 2 == 0) -9f else 9f
+            }, LinearLayout.LayoutParams(size, size).apply {
+                bottomMargin = if (isMe) dp(6) else dp(14)
+                leftMargin = dp(2); rightMargin = dp(2)
             })
         }
-        frame.addView(ImageView(this).apply {
-            setImageResource(p.chara.resId)
-            rotation = 4f
-        }, FrameLayout.LayoutParams(dp(108), dp(108),
-            Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
-            bottomMargin = dp(10)
-        })
-        if (friends.size >= 2) {
-            frame.addView(ImageView(this).apply {
-                setImageResource(friends[1].resId)
-                rotation = 10f
-            }, FrameLayout.LayoutParams(dp(84), dp(84), Gravity.BOTTOM or Gravity.END).apply {
-                rightMargin = dp(10); bottomMargin = dp(24)
-            })
-        }
+        frame.addView(row, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+        ))
         content.addView(frame)
         content.addView(TextView(this).apply {
             text = ev.message
@@ -505,9 +555,9 @@ class MainActivity : Activity() {
             .setView(ScrollView(this).apply { addView(content) })
             .setCancelable(false)
             .setPositiveButton("OK") { _, _ ->
-                p.manpuku = min(999, p.manpuku + ev.dManpuku)
-                p.juujitsu = min(999, p.juujitsu + ev.dJuujitsu)
-                p.yuujou = min(999, p.yuujou + ev.dYuujou)
+                p.manpuku = (p.manpuku + ev.dManpuku).coerceIn(0, 999)
+                p.juujitsu = (p.juujitsu + ev.dJuujitsu).coerceIn(0, 999)
+                p.yuujou = (p.yuujou + ev.dYuujou).coerceIn(0, 999)
                 updateStatsBar()
                 nextTurn()
             }
