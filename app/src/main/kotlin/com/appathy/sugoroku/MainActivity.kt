@@ -18,6 +18,7 @@ import android.view.animation.DecelerateInterpolator
 import android.view.animation.LinearInterpolator
 import android.widget.*
 import kotlin.math.abs
+import kotlin.math.floor
 import kotlin.math.min
 import kotlin.math.sin
 import kotlin.random.Random
@@ -35,8 +36,19 @@ class MainActivity : Activity() {
     data class Chara(val name: String, val resId: Int)
     data class Player(
         val chara: Chara, val isHuman: Boolean, var position: Int = 0,
-        var manpuku: Int = 0, var juujitsu: Int = 0, var yuujou: Int = 0
+        var manpuku: Int = 0, var juujitsu: Int = 0, var yuujou: Int = 0,
+        var boostNext: Boolean = false   // 満腹スキル発動中（次のルーレット+3）
     )
+
+    /** スキル定数 */
+    object Skill {
+        const val MANPUKU_COST = 10      // 満腹を消費して
+        const val MANPUKU_BONUS = 3      //   ルーレット+3
+        const val JUUJITSU_COST = 10     // 充実を消費して
+        const val JUUJITSU_PUSH = 2      //   自分以外を2マス戻す
+        const val YUUJOU_THRESHOLD = 30  // 友情がこの値以上なら
+        const val YUUJOU_BONUS = 1       //   常にルーレット+1
+    }
 
     /** イベント定義: 背景・メッセージ・ステータス変化・登場するどうぶつの数（本人含む） */
     data class GameEvent(
@@ -132,6 +144,8 @@ class MainActivity : Activity() {
     private lateinit var speedButton: Button
     private lateinit var startButton: Button
     private lateinit var statsBar: TextView
+    private lateinit var manpukuSkillButton: Button
+    private lateinit var juujitsuSkillButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -321,6 +335,39 @@ class MainActivity : Activity() {
         }
         root.addView(statusText)
 
+        // スキル行
+        val skillRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(8), dp(2), dp(8), dp(2))
+        }
+        manpukuSkillButton = Button(this).apply {
+            textSize = 12f
+            minHeight = 0
+            minimumHeight = 0
+            setTextColor(Color.WHITE)
+            background = roundedBg(Color.parseColor("#EF6C00"))
+            setPadding(dp(4), dp(8), dp(4), dp(8))
+            text = "🍖満腹${Skill.MANPUKU_COST}→+${Skill.MANPUKU_BONUS}"
+            setOnClickListener { useManpukuSkill() }
+        }
+        skillRow.addView(manpukuSkillButton, LinearLayout.LayoutParams(
+            0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+        ).apply { rightMargin = dp(4) })
+        juujitsuSkillButton = Button(this).apply {
+            textSize = 12f
+            minHeight = 0
+            minimumHeight = 0
+            setTextColor(Color.WHITE)
+            background = roundedBg(Color.parseColor("#6A1B9A"))
+            setPadding(dp(4), dp(8), dp(4), dp(8))
+            text = "✨充実${Skill.JUUJITSU_COST}→みんな-${Skill.JUUJITSU_PUSH}"
+            setOnClickListener { useJuujitsuSkill() }
+        }
+        skillRow.addView(juujitsuSkillButton, LinearLayout.LayoutParams(
+            0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+        ).apply { leftMargin = dp(4) })
+        root.addView(skillRow)
+
         val controlRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(8), 0, dp(8), dp(4))
@@ -379,7 +426,66 @@ class MainActivity : Activity() {
 
     private fun updateStatsBar() {
         val me = players.firstOrNull { it.isHuman } ?: return
-        statsBar.text = "満腹 ${me.manpuku}　　充実 ${me.juujitsu}　　友情 ${me.yuujou}"
+        val bonus = StringBuilder()
+        if (me.yuujou >= Skill.YUUJOU_THRESHOLD) bonus.append("　🤝+${Skill.YUUJOU_BONUS}")
+        if (me.boostNext) bonus.append("　🍖+${Skill.MANPUKU_BONUS}")
+        statsBar.text = "満腹 ${me.manpuku}　　充実 ${me.juujitsu}　　友情 ${me.yuujou}$bonus"
+    }
+
+    /** スキルボタンの有効/無効を現在の手番と所持ステータスから更新 */
+    private fun updateSkillButtons() {
+        if (!::manpukuSkillButton.isInitialized) return
+        val p = players.getOrNull(turn)
+        val myTurn = p != null && p.isHuman && !rouletteView.locked
+        manpukuSkillButton.isEnabled =
+            myTurn && p!!.manpuku >= Skill.MANPUKU_COST && !p.boostNext
+        juujitsuSkillButton.isEnabled =
+            myTurn && p!!.juujitsu >= Skill.JUUJITSU_COST && players.size > 1
+        manpukuSkillButton.alpha = if (manpukuSkillButton.isEnabled) 1f else 0.4f
+        juujitsuSkillButton.alpha = if (juujitsuSkillButton.isEnabled) 1f else 0.4f
+    }
+
+    /** 満腹を消費して次のルーレットに+3 */
+    private fun useManpukuSkill() {
+        val p = players[turn]
+        if (!p.isHuman || p.manpuku < Skill.MANPUKU_COST || p.boostNext) return
+        p.manpuku -= Skill.MANPUKU_COST
+        p.boostNext = true
+        statusText.text = "🍖 パワーアップ！ つぎのルーレットに +${Skill.MANPUKU_BONUS}"
+        updateStatsBar()
+        updateSkillButtons()
+    }
+
+    /** 充実を消費して自分以外を2マス戻す */
+    private fun useJuujitsuSkill() {
+        val p = players[turn]
+        if (!p.isHuman || p.juujitsu < Skill.JUUJITSU_COST || players.size < 2) return
+        p.juujitsu -= Skill.JUUJITSU_COST
+        for (other in players) {
+            if (other !== p) other.position = (other.position - Skill.JUUJITSU_PUSH).coerceAtLeast(0)
+        }
+        statusText.text = "✨ みんなを ${Skill.JUUJITSU_PUSH}マス もどした！"
+        boardView.invalidate()
+        updateStatsBar()
+        updateSkillButtons()
+    }
+
+    /** CPUのスキル使用（人間と同じコストで判断） */
+    private fun cpuUseSkills(p: Player) {
+        if (p.juujitsu >= Skill.JUUJITSU_COST && players.size > 1 && Random.nextFloat() < 0.4f) {
+            p.juujitsu -= Skill.JUUJITSU_COST
+            for (other in players) {
+                if (other !== p) other.position = (other.position - Skill.JUUJITSU_PUSH).coerceAtLeast(0)
+            }
+            statusText.text = "✨ ${p.chara.name} が みんなを ${Skill.JUUJITSU_PUSH}マス もどした！"
+            boardView.invalidate()
+            updateStatsBar()
+        }
+        if (p.manpuku >= Skill.MANPUKU_COST && !p.boostNext && Random.nextFloat() < 0.5f) {
+            p.manpuku -= Skill.MANPUKU_COST
+            p.boostNext = true
+            statusText.text = "🍖 ${p.chara.name} が パワーアップ！"
+        }
     }
 
     private fun showStatusDialog() {
@@ -387,7 +493,12 @@ class MainActivity : Activity() {
         for (p in players) {
             val who = if (p.isHuman) "${p.chara.name}（きみ）" else "${p.chara.name}（CPU）"
             sb.append("$who\n  マス: ${p.position} / ${Board.GOAL_INDEX}\n")
-            sb.append("  満腹 ${p.manpuku}　充実 ${p.juujitsu}　友情 ${p.yuujou}\n\n")
+            sb.append("  満腹 ${p.manpuku}　充実 ${p.juujitsu}　友情 ${p.yuujou}\n")
+            val marks = ArrayList<String>()
+            if (p.yuujou >= Skill.YUUJOU_THRESHOLD) marks.add("友情ボーナス +${Skill.YUUJOU_BONUS}")
+            if (p.boostNext) marks.add("パワーアップ中 +${Skill.MANPUKU_BONUS}")
+            if (marks.isNotEmpty()) sb.append("  ${marks.joinToString("／")}\n")
+            sb.append("\n")
         }
         AlertDialog.Builder(this)
             .setTitle("ステータス")
@@ -401,6 +512,8 @@ class MainActivity : Activity() {
         if (!p.isHuman || rouletteView.locked) return
         startButton.isEnabled = false
         boardView.panEnabled = false
+        rouletteView.locked = true
+        updateSkillButtons()
         // スライドで見ていた位置から自分の位置へ戻ってから回す
         boardView.focusCell(p.position, slow = false)
         handler.postDelayed({ rouletteView.autoSpin() }, 380)
@@ -415,18 +528,34 @@ class MainActivity : Activity() {
             rouletteView.locked = false
             startButton.isEnabled = true
             boardView.panEnabled = true   // 前後の状況をスライドで確認できる
+            updateSkillButtons()
         } else {
             statusText.text = "${p.chara.name}（CPU）のばん…"
             rouletteView.locked = true
             startButton.isEnabled = false
             boardView.panEnabled = false
+            updateSkillButtons()
+            cpuUseSkills(p)
             handler.postDelayed({ rouletteView.autoSpin() }, Speed.cpuWaitMs)
         }
     }
 
-    private fun onRouletteResult(steps: Int) {
+    private fun onRouletteResult(raw: Int) {
         val p = players[turn]
-        statusText.text = "${p.chara.name} は「$steps」！"
+        var steps = raw
+        val extras = StringBuilder()
+        if (p.boostNext) {
+            steps += Skill.MANPUKU_BONUS
+            p.boostNext = false
+            extras.append(" 🍖+${Skill.MANPUKU_BONUS}")
+        }
+        if (p.yuujou >= Skill.YUUJOU_THRESHOLD) {
+            steps += Skill.YUUJOU_BONUS
+            extras.append(" 🤝+${Skill.YUUJOU_BONUS}")
+        }
+        statusText.text = if (extras.isEmpty()) "${p.chara.name} は「$steps」！"
+                          else "${p.chara.name} は「$raw」$extras → $steps マス！"
+        updateStatsBar()
         movePiece(p, steps, fromEvent = false)
     }
 
@@ -435,6 +564,7 @@ class MainActivity : Activity() {
         rouletteView.locked = true
         startButton.isEnabled = false
         boardView.panEnabled = false
+        updateSkillButtons()
         val delta = if (steps > 0) 1 else -1
         var remaining = abs(steps)
         val stepRunnable = object : Runnable {
@@ -469,7 +599,7 @@ class MainActivity : Activity() {
                 .setMessage(msg)
                 .setCancelable(false)
                 .setPositiveButton("もういちど") { _, _ ->
-                    players.forEach { it.position = 0; it.manpuku = 0; it.juujitsu = 0; it.yuujou = 0 }
+                    players.forEach { it.position = 0; it.manpuku = 0; it.juujitsu = 0; it.yuujou = 0; it.boostNext = false }
                     turn = 0
                     showGame()
                 }
@@ -590,6 +720,7 @@ class MainActivity : Activity() {
 
         private val bitmaps: Map<Int, Bitmap> = players.map { it.chara.resId }.distinct()
             .associateWith { BitmapFactory.decodeResource(resources, it) }
+        private val forest: Bitmap = BitmapFactory.decodeResource(resources, R.drawable.bg_forest)
 
         private var camX = 0f
         private var camAnim: ValueAnimator? = null
@@ -599,7 +730,7 @@ class MainActivity : Activity() {
         private var lastTouchX = 0f
 
         private val pathPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#A5D6A7"); strokeWidth = 22f; strokeCap = Paint.Cap.ROUND
+            color = Color.parseColor("#C9A66B"); strokeWidth = 26f; strokeCap = Paint.Cap.ROUND
         }
         private val cellPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FFF8E1") }
         private val fwdPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#81D4FA") }
@@ -696,8 +827,34 @@ class MainActivity : Activity() {
 
         override fun onDraw(canvas: Canvas) {
             if (spacing == 0f) return
+            drawForest(canvas)
             drawTrack(canvas)
             drawMiniMap(canvas)
+        }
+
+        /**
+         * 森の背景。カメラに対して0.25倍のパララックスで流れる。
+         * 1枚を左右反転しながら並べることで継ぎ目なくループさせる。
+         */
+        private fun drawForest(canvas: Canvas) {
+            val scale = height.toFloat() / forest.height
+            val tileW = forest.width * scale
+            if (tileW <= 0f) return
+            val offset = -camX * 0.25f
+            val iMin = floor((0f - offset - tileW) / tileW).toInt()
+            val iMax = floor((width - offset) / tileW).toInt() + 1
+            for (i in iMin..iMax) {
+                val left = offset + i * tileW
+                val dst = RectF(left, 0f, left + tileW, height.toFloat())
+                if (Math.floorMod(i, 2) == 0) {
+                    canvas.drawBitmap(forest, null, dst, null)
+                } else {
+                    canvas.save()
+                    canvas.scale(-1f, 1f, dst.centerX(), dst.centerY())
+                    canvas.drawBitmap(forest, null, dst, null)
+                    canvas.restore()
+                }
+            }
         }
 
         private fun cellFill(i: Int): Paint {
