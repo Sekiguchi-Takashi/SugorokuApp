@@ -565,7 +565,7 @@ class MainActivity : Activity() {
         if (me.yuujou >= Skill.YUUJOU_THRESHOLD) bonus.append("　🤝+${Skill.YUUJOU_BONUS}")
         if (me.boostNext) bonus.append("　🍖+${Skill.MANPUKU_BONUS}")
         val tag = if (me.isHuman && players.count { it.isHuman } >= 2) "${me.humanNo}P " else ""
-        statsBar.text = "$tag満腹 ${me.manpuku}　　充実 ${me.juujitsu}　　友情 ${me.yuujou}$bonus"
+        statsBar.text = "${tag}満腹 ${me.manpuku}　　充実 ${me.juujitsu}　　友情 ${me.yuujou}$bonus"
     }
 
     private fun updateSkillButtons() {
