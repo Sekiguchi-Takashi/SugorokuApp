@@ -40,7 +40,9 @@ class MainActivity : Activity() {
         var manpuku: Int = 0, var juujitsu: Int = 0, var yuujou: Int = 0,
         var boostNext: Boolean = false,  // 満腹スキル発動中（次のルーレット+3）
         var married: Boolean = false,    // 結婚後はイベントのステータス上昇が1.5倍
-        var hasChild: Boolean = false    // 子どもが生まれると2.0倍
+        var hasChild: Boolean = false,   // 子どもが生まれると2.0倍
+        var inCave: Boolean = false,     // 洞窟ルートを進行中
+        var caveReturn: Int = 0          // 洞窟を抜けたときに復帰する本線のマス
     ) {
         val total: Int get() = manpuku + juujitsu + yuujou
     }
@@ -61,7 +63,8 @@ class MainActivity : Activity() {
     data class Stage(
         val name: String,
         val events: Map<Int, GameEvent>,
-        val moves: IntArray
+        val moves: IntArray,
+        val branchCell: Int      // ここに止まると洞窟ルートへ分岐（+20マス先で復帰）
     )
 
     /** スキル定数 */
@@ -111,6 +114,20 @@ class MainActivity : Activity() {
         )
     }
 
+    /** 洞窟ルート（全ステージ共通・20マス）。抜けると分岐マスの20マス先に復帰する */
+    private val caveEvents by lazy {
+        mapOf(
+            3 to GameEvent(R.drawable.bg_cave, "ひかる石を みつけた！\n充実15", 0, 15, 0, 1),
+            7 to GameEvent(R.drawable.bg_cave, "こうもりに おどろいた…。\n充実-10", 0, -10, 0, 1),
+            11 to GameEvent(R.drawable.bg_cave, "きれいな ちかすいを のんだ。\n満腹10　充実5", 10, 5, 0, 1),
+            15 to GameEvent(R.drawable.bg_cave, "たからばこを みつけた！\n満腹15　充実15　友情15", 15, 15, 15, 1)
+        )
+    }
+    private val caveMoves = IntArray(Board.CAVE_COUNT).apply {
+        this[2] = -2; this[5] = -3; this[9] = 2; this[13] = -3; this[17] = -3
+    }
+    private val CAVE_SKIP = 20   // 分岐マスから何マス先に復帰するか
+
     // ================= ステージ定義 =================
     private val stages: List<Stage> by lazy {
         listOf(
@@ -135,7 +152,8 @@ class MainActivity : Activity() {
                 IntArray(30).apply {
                     this[3] = -2; this[8] = -3; this[10] = 2; this[12] = -3; this[16] = -2
                     this[20] = 2; this[21] = -3; this[24] = -4; this[27] = -3; this[28] = -2
-                }
+                },
+                branchCell = 5
             ),
             Stage(
                 "たびのステージ",
@@ -158,7 +176,8 @@ class MainActivity : Activity() {
                     this[3] = -2; this[5] = -3; this[10] = -2; this[11] = -3; this[14] = 2
                     this[16] = -3; this[17] = -2; this[21] = -4; this[23] = -2; this[25] = 2
                     this[27] = -3; this[28] = -3
-                }
+                },
+                branchCell = 7
             ),
             Stage(
                 "あそびのステージ",
@@ -182,7 +201,8 @@ class MainActivity : Activity() {
                     this[3] = -2; this[5] = -3; this[8] = -3; this[9] = 2; this[11] = -3
                     this[14] = -4; this[15] = 3; this[17] = -3; this[20] = -2; this[21] = 2
                     this[23] = -3; this[26] = -3; this[28] = -4
-                }
+                },
+                branchCell = 1
             )
         )
     }
@@ -228,6 +248,9 @@ class MainActivity : Activity() {
         Board.normalEventCells = stage.events.filterValues { it.kind == EventKind.NORMAL }.keys
         Board.weddingCells = stage.events.filterValues { it.kind == EventKind.WEDDING }.keys
         Board.birthCells = stage.events.filterValues { it.kind == EventKind.BIRTH }.keys
+        Board.branchCell = stage.branchCell
+        Board.caveMoves = caveMoves
+        Board.caveEventCells = caveEvents.keys
     }
 
     // ---------------- タイトル画面 ----------------
@@ -369,7 +392,7 @@ class MainActivity : Activity() {
             setPadding(dp(12), 0, dp(12), 0)
         }
         infoRow.addView(TextView(this).apply {
-            text = "ステージ${stageIndex + 1}/${stages.size}「${stage.name}」\n🔵すすむ 🔴もどる ⭐イベント 💒けっこん 👶あかちゃん"
+            text = "ステージ${stageIndex + 1}/${stages.size}「${stage.name}」\n🔵すすむ 🔴もどる ⭐イベント 💒けっこん 👶あかちゃん\nむらさきの「あな」= どうくつルートへ分岐"
             textSize = 11f
             setTextColor(Color.parseColor("#558B2F"))
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
@@ -509,7 +532,8 @@ class MainActivity : Activity() {
         for (p in players.sortedByDescending { it.total }) {
             val who = if (p.isHuman) "${p.chara.name}（きみ）" else "${p.chara.name}（CPU）"
             sb.append("$who　ごうけい ${p.total}\n")
-            sb.append("  マス: ${p.position} / ${Board.GOAL_INDEX}\n")
+            val where = if (p.inCave) "どうくつ" else "ほんせん"
+            sb.append("  $where ${p.position} / ${Board.goal(p.inCave)}\n")
             sb.append("  満腹 ${p.manpuku}　充実 ${p.juujitsu}　友情 ${p.yuujou}\n")
             val marks = ArrayList<String>()
             if (p.hasChild) marks.add("👶こども あり（イベント${Skill.CHILD_MULTIPLIER}倍）")
@@ -582,6 +606,7 @@ class MainActivity : Activity() {
     private fun startTurn() {
         val p = players[turn]
         boardView.turnIndex = turn
+        boardView.world = p.inCave
         boardView.focusCell(p.position, slow = true)
         if (p.isHuman) {
             statusText.text = "きみ（${p.chara.name}）のばん！ スタートを おしてね"
@@ -628,7 +653,7 @@ class MainActivity : Activity() {
         var remaining = abs(steps)
         val stepRunnable = object : Runnable {
             override fun run() {
-                val canMove = if (delta > 0) p.position < Board.GOAL_INDEX else p.position > 0
+                val canMove = if (delta > 0) p.position < Board.goal(p.inCave) else p.position > 0
                 if (remaining > 0 && canMove) {
                     p.position += delta
                     boardView.focusCell(p.position, slow = false)
@@ -656,16 +681,21 @@ class MainActivity : Activity() {
     }
 
     private fun onLanded(p: Player, fromEvent: Boolean) {
-        if (p.position >= Board.GOAL_INDEX) {
-            stageClear(p)
+        if (p.position >= Board.goal(p.inCave)) {
+            if (p.inCave) exitCave(p) else stageClear(p)
             return
         }
-        val ev = stage.events[p.position]
+        // 分岐マス（本線のみ）: 洞窟ルートへ
+        if (!p.inCave && p.position == stage.branchCell && !fromEvent) {
+            enterCave(p)
+            return
+        }
+        val ev = if (p.inCave) caveEvents[p.position] else stage.events[p.position]
         if (ev != null && !fromEvent && eventAvailable(p, ev)) {
             showEvent(p, ev)
             return
         }
-        val mv = Board.moves[p.position]
+        val mv = Board.movesOf(p.inCave)[p.position]
         if (mv != 0 && !fromEvent) {
             statusText.text = if (mv > 0) "${p.chara.name} は ${mv}マス すすむ！"
                               else "${p.chara.name} は ${-mv}マス もどる…"
@@ -673,6 +703,83 @@ class MainActivity : Activity() {
         } else {
             nextTurn()
         }
+    }
+
+    // ---------------- 洞窟ルート ----------------
+    private fun enterCave(p: Player) {
+        p.caveReturn = (p.position + CAVE_SKIP).coerceAtMost(Board.goal(false))
+        showPhotoDialog(
+            p, R.drawable.bg_cave,
+            "ほらあなを みつけた！\nくらい どうくつへ はいってみよう。\n\nぬけると ${p.caveReturn}マスめに でられるよ（ぜん${Board.CAVE_COUNT}マス）"
+        ) {
+            p.inCave = true
+            p.position = 0
+            boardView.world = true
+            boardView.invalidate()
+            nextTurn()
+        }
+    }
+
+    private fun exitCave(p: Player) {
+        showPhotoDialog(
+            p, R.drawable.bg_cave,
+            "どうくつを ぬけた！\nあかるい ばしょに でたよ。\n\n${p.caveReturn}マスめから さいかいだ！"
+        ) {
+            p.inCave = false
+            p.position = p.caveReturn
+            boardView.world = false
+            boardView.invalidate()
+            onLanded(p, fromEvent = false)   // 復帰先のマスは通常どおり発動する
+        }
+    }
+
+    /** 写真＋家族＋メッセージのシンプルなダイアログ（洞窟の出入りなど） */
+    private fun showPhotoDialog(p: Player, bgRes: Int, message: String, onOk: () -> Unit) {
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+        }
+        val frame = FrameLayout(this)
+        frame.addView(ImageView(this).apply {
+            setImageResource(bgRes)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            adjustViewBounds = true
+        }, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT
+        ))
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+        }
+        row.addView(ImageView(this).apply { setImageResource(p.chara.resId); rotation = 3f },
+            LinearLayout.LayoutParams(dp(100), dp(100)).apply { bottomMargin = dp(6) })
+        if (p.married) row.addView(ImageView(this).apply {
+            setImageResource(p.chara.partnerRes); rotation = -4f
+        }, LinearLayout.LayoutParams(dp(88), dp(88)).apply { bottomMargin = dp(6) })
+        if (p.hasChild) row.addView(ImageView(this).apply {
+            setImageResource(p.chara.childRes); rotation = -4f
+        }, LinearLayout.LayoutParams(dp(66), dp(66)).apply { bottomMargin = dp(6) })
+        frame.addView(row, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+        ))
+        content.addView(frame)
+        content.addView(TextView(this).apply {
+            text = message
+            textSize = 16f
+            setTextColor(Color.parseColor("#263238"))
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            background = roundedBg(Color.WHITE, Color.parseColor("#4527A0"))
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(10) })
+
+        AlertDialog.Builder(this)
+            .setView(ScrollView(this).apply { addView(content) })
+            .setCancelable(false)
+            .setPositiveButton("OK") { _, _ -> onOk() }
+            .show()
     }
 
     // ---------------- ステージクリア / 最終結果 ----------------
@@ -698,7 +805,7 @@ class MainActivity : Activity() {
             .setCancelable(false)
             .setPositiveButton("つぎのステージへ") { _, _ ->
                 stageIndex++
-                players.forEach { it.position = 0 }
+                players.forEach { it.position = 0; it.inCave = false; it.caveReturn = 0 }
                 turn = players.indexOf(winner).coerceAtLeast(0)
                 applyStage()
                 showGame()
@@ -730,6 +837,7 @@ class MainActivity : Activity() {
                 players.forEach {
                     it.position = 0; it.manpuku = 0; it.juujitsu = 0; it.yuujou = 0
                     it.boostNext = false; it.married = false; it.hasChild = false
+                    it.inCave = false; it.caveReturn = 0
                 }
                 stageIndex = 0
                 turn = 0
@@ -841,19 +949,41 @@ class MainActivity : Activity() {
 
     // ================= 盤面 =================
     object Board {
-        const val CELL_COUNT = 30
-        const val GOAL_INDEX = CELL_COUNT - 1
+        const val MAIN_COUNT = 30
+        const val CAVE_COUNT = 20
 
         /** +n=nマスすすむ / -n=nマスもどる / 0=通常。ステージ切替時に applyStage() が差し替える */
-        var moves: IntArray = IntArray(CELL_COUNT)
+        var moves: IntArray = IntArray(MAIN_COUNT)
         var normalEventCells: Set<Int> = emptySet()
         var weddingCells: Set<Int> = emptySet()
         var birthCells: Set<Int> = emptySet()
+        var branchCell: Int = -1
+
+        var caveMoves: IntArray = IntArray(CAVE_COUNT)
+        var caveEventCells: Set<Int> = emptySet()
+
+        fun count(cave: Boolean) = if (cave) CAVE_COUNT else MAIN_COUNT
+        fun goal(cave: Boolean) = count(cave) - 1
+        fun movesOf(cave: Boolean) = if (cave) caveMoves else moves
     }
 
     class BoardView(context: Context, private val players: List<Player>) : View(context) {
         var turnIndex = 0
         var panEnabled = false
+
+        /** false=本線 / true=洞窟。手番プレイヤーのいる世界を描画する */
+        var world = false
+            set(v) {
+                if (field != v) {
+                    field = v
+                    invalidate()
+                }
+            }
+
+        private val cellCount: Int get() = Board.count(world)
+        private val goalIndex: Int get() = Board.goal(world)
+        /** 今の世界にいるプレイヤーだけを描く */
+        private fun visiblePlayers() = players.withIndex().filter { it.value.inCave == world }
 
         private val bitmaps: Map<Int, Bitmap> = players.map { it.chara.resId }.distinct()
             .associateWith { BitmapFactory.decodeResource(resources, it) }
@@ -862,6 +992,7 @@ class MainActivity : Activity() {
         private val childBitmaps: Map<Int, Bitmap> = players.map { it.chara.childRes }.distinct()
             .associateWith { BitmapFactory.decodeResource(resources, it) }
         private val forest: Bitmap = BitmapFactory.decodeResource(resources, R.drawable.bg_forest)
+        private val cave: Bitmap = BitmapFactory.decodeResource(resources, R.drawable.bg_cave)
 
         private var camX = 0f
         private var camAnim: ValueAnimator? = null
@@ -879,6 +1010,10 @@ class MainActivity : Activity() {
         private val eventPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#CE93D8") }
         private val weddingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#F8BBD0") }
         private val babyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FFE082") }
+        private val branchPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#7E57C2") }
+        private val branchTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE; textAlign = Paint.Align.CENTER; typeface = Typeface.DEFAULT_BOLD
+        }
         private val cellEdge = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#8D6E63"); style = Paint.Style.STROKE; strokeWidth = 5f
         }
@@ -947,7 +1082,7 @@ class MainActivity : Activity() {
                     lastTouchX = e.x
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    camX = (camX - (e.x - lastTouchX)).coerceIn(0f, worldX(Board.GOAL_INDEX))
+                    camX = (camX - (e.x - lastTouchX)).coerceIn(0f, worldX(goalIndex))
                     lastTouchX = e.x
                     invalidate()
                 }
@@ -961,6 +1096,7 @@ class MainActivity : Activity() {
             laneY = h * 0.72f
             textPaint.textSize = cellR * 0.62f
             eventTextPaint.textSize = cellR * 0.62f
+            branchTextPaint.textSize = cellR * 0.46f
             camX = worldX(players.getOrNull(turnIndex)?.position ?: 0)
         }
 
@@ -973,8 +1109,9 @@ class MainActivity : Activity() {
 
         /** 森の背景。カメラの0.25倍でパララックス、左右反転しながら並べて継ぎ目なくループ */
         private fun drawForest(canvas: Canvas) {
-            val scale = height.toFloat() / forest.height
-            val tileW = forest.width * scale
+            val bmp = if (world) cave else forest
+            val scale = height.toFloat() / bmp.height
+            val tileW = bmp.width * scale
             if (tileW <= 0f) return
             val offset = -camX * 0.25f
             val iMin = floor((0f - offset - tileW) / tileW).toInt()
@@ -983,11 +1120,11 @@ class MainActivity : Activity() {
                 val left = offset + i * tileW
                 val dst = RectF(left, 0f, left + tileW, height.toFloat())
                 if (Math.floorMod(i, 2) == 0) {
-                    canvas.drawBitmap(forest, null, dst, null)
+                    canvas.drawBitmap(bmp, null, dst, null)
                 } else {
                     canvas.save()
                     canvas.scale(-1f, 1f, dst.centerX(), dst.centerY())
-                    canvas.drawBitmap(forest, null, dst, null)
+                    canvas.drawBitmap(bmp, null, dst, null)
                     canvas.restore()
                 }
             }
@@ -995,13 +1132,20 @@ class MainActivity : Activity() {
 
         /** 出産マスは、結婚済みのプレイヤーが1人もいない間は姿を現さない */
         private fun lockedBirth(i: Int): Boolean =
-            i in Board.birthCells && players.none { it.married }
+            !world && i in Board.birthCells && players.none { it.married }
 
         private fun cellFill(i: Int): Paint {
-            val mv = Board.moves[i]
+            val mv = Board.movesOf(world)[i]
             return when {
                 i == 0 -> startPaint
-                i == Board.GOAL_INDEX -> goalPaint
+                i == goalIndex -> goalPaint
+                world -> when {
+                    i in Board.caveEventCells -> eventPaint
+                    mv > 0 -> fwdPaint
+                    mv < 0 -> backPaint
+                    else -> cellPaint
+                }
+                i == Board.branchCell -> branchPaint
                 lockedBirth(i) -> cellPaint
                 i in Board.birthCells -> babyPaint
                 i in Board.weddingCells -> weddingPaint
@@ -1017,29 +1161,32 @@ class MainActivity : Activity() {
             canvas.save()
             canvas.translate(dx, 0f)
 
-            val first = (((camX - width) / spacing).toInt() - 1).coerceIn(0, Board.CELL_COUNT - 1)
-            val last = (((camX + width) / spacing).toInt() + 1).coerceIn(0, Board.CELL_COUNT - 1)
+            val first = (((camX - width) / spacing).toInt() - 1).coerceIn(0, cellCount - 1)
+            val last = (((camX + width) / spacing).toInt() + 1).coerceIn(0, cellCount - 1)
 
-            canvas.drawLine(worldX(0), laneY, worldX(Board.CELL_COUNT - 1), laneY, pathPaint)
+            canvas.drawLine(worldX(0), laneY, worldX(cellCount - 1), laneY, pathPaint)
 
             for (i in first..last) {
                 val x = worldX(i)
-                val mv = Board.moves[i]
+                val mv = Board.movesOf(world)[i]
+                val eventCells = if (world) Board.caveEventCells else Board.normalEventCells
                 canvas.drawCircle(x, laneY, cellR, cellFill(i))
                 canvas.drawCircle(x, laneY, cellR, cellEdge)
                 when {
                     i == 0 -> canvas.drawText("S", x, laneY + textPaint.textSize / 3, textPaint)
-                    i == Board.GOAL_INDEX -> canvas.drawText("G", x, laneY + textPaint.textSize / 3, textPaint)
+                    i == goalIndex -> canvas.drawText("G", x, laneY + textPaint.textSize / 3, textPaint)
+                    !world && i == Board.branchCell ->
+                        canvas.drawText("あな", x, laneY + branchTextPaint.textSize / 3, branchTextPaint)
                     lockedBirth(i) -> canvas.drawText("$i", x, laneY + textPaint.textSize / 3, textPaint)
-                    i in Board.birthCells -> canvas.drawText("👶", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
-                    i in Board.weddingCells -> canvas.drawText("💒", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
-                    i in Board.normalEventCells -> canvas.drawText("⭐", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
+                    !world && i in Board.birthCells -> canvas.drawText("👶", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
+                    !world && i in Board.weddingCells -> canvas.drawText("💒", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
+                    i in eventCells -> canvas.drawText("⭐", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
                     mv != 0 -> canvas.drawText(if (mv > 0) "+$mv" else "$mv", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
                     else -> canvas.drawText("$i", x, laneY + textPaint.textSize / 3, textPaint)
                 }
             }
 
-            val byCell = players.withIndex().groupBy { it.value.position.coerceIn(0, Board.GOAL_INDEX) }
+            val byCell = visiblePlayers().groupBy { it.value.position.coerceIn(0, goalIndex) }
             for ((cell, group) in byCell) {
                 if (cell < first - 1 || cell > last + 1) continue
                 val cx = worldX(cell)
@@ -1111,15 +1258,15 @@ class MainActivity : Activity() {
             canvas.drawLine(l, lineY, r, lineY, mapLinePaint)
 
             val miniR = (frameB - frameT) * 0.085f
-            for (i in 0 until Board.CELL_COUNT) {
-                val x = l + (r - l) * i / (Board.CELL_COUNT - 1)
+            for (i in 0 until cellCount) {
+                val x = l + (r - l) * i / (cellCount - 1)
                 mapCellPaint.color = cellFill(i).color
                 canvas.drawCircle(x, lineY, miniR, mapCellPaint)
             }
 
-            val byCell = players.withIndex().groupBy { it.value.position.coerceIn(0, Board.GOAL_INDEX) }
+            val byCell = visiblePlayers().groupBy { it.value.position.coerceIn(0, goalIndex) }
             for ((cell, group) in byCell) {
-                val x = l + (r - l) * cell / (Board.CELL_COUNT - 1)
+                val x = l + (r - l) * cell / (cellCount - 1)
                 val sorted = group.sortedBy { if (it.index == turnIndex) 1 else 0 }
                 for ((slot, entry) in sorted.withIndex()) {
                     val bmp = bitmaps[entry.value.chara.resId] ?: continue
