@@ -14,6 +14,7 @@ import android.os.Looper
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.animation.TimeInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.LinearInterpolator
 import android.widget.*
@@ -42,7 +43,8 @@ class MainActivity : Activity() {
         var married: Boolean = false,    // 結婚後はイベントのステータス上昇が1.5倍
         var hasChild: Boolean = false,   // 子どもが生まれると2.0倍
         var inCave: Boolean = false,     // 洞窟ルートを進行中
-        var caveReturn: Int = 0          // 洞窟を抜けたときに復帰する本線のマス
+        var caveReturn: Int = 0,         // 洞窟を抜けたときに復帰する本線のマス
+        val humanNo: Int = 0             // 人間プレイヤーの番号（1P/2P）。CPUは0
     ) {
         val total: Int get() = manpuku + juujitsu + yuujou
     }
@@ -56,14 +58,16 @@ class MainActivity : Activity() {
         val dJuujitsu: Int = 0,
         val dYuujou: Int = 0,
         val groupSize: Int = 1,
-        val kind: EventKind = EventKind.NORMAL
+        val kind: EventKind = EventKind.NORMAL,
+        /** イベントの結果すすむ/もどるマス数。0なら移動なし（0のイベントが多数） */
+        val dMove: Int = 0
     )
 
     /** 1ステージ分の盤面定義 */
     data class Stage(
         val name: String,
+        val bgRes: Int,          // 盤面の背景
         val events: Map<Int, GameEvent>,
-        val moves: IntArray,
         val branchCell: Int      // ここに止まると洞窟ルートへ分岐（+20マス先で復帰）
     )
 
@@ -118,90 +122,93 @@ class MainActivity : Activity() {
     private val caveEvents by lazy {
         mapOf(
             3 to GameEvent(R.drawable.bg_cave, "ひかる石を みつけた！\n充実15", 0, 15, 0, 1),
-            7 to GameEvent(R.drawable.bg_cave, "こうもりに おどろいた…。\n充実-10", 0, -10, 0, 1),
+            5 to GameEvent(R.drawable.bg_cave, "みちに まよってしまった…。\n3マス もどる", 0, 0, 0, 1, dMove = -3),
+            7 to GameEvent(R.drawable.bg_cave, "こうもりに おどろいた…。\n充実-10　2マス もどる", 0, -10, 0, 1, dMove = -2),
+            9 to GameEvent(R.drawable.bg_cave, "ちかどうを みつけた！\n2マス すすむ", 0, 0, 0, 1, dMove = 2),
             11 to GameEvent(R.drawable.bg_cave, "きれいな ちかすいを のんだ。\n満腹10　充実5", 10, 5, 0, 1),
-            15 to GameEvent(R.drawable.bg_cave, "たからばこを みつけた！\n満腹15　充実15　友情15", 15, 15, 15, 1)
+            13 to GameEvent(R.drawable.bg_cave, "ちかの ひろばに でた。\n充実10", 0, 10, 0, 1),
+            15 to GameEvent(R.drawable.bg_cave, "たからばこを みつけた！\n満腹15　充実15　友情15", 15, 15, 15, 1),
+            17 to GameEvent(R.drawable.bg_cave, "あしもとが すべった…。\n3マス もどる", 0, 0, 0, 1, dMove = -3)
         )
     }
-    private val caveMoves = IntArray(Board.CAVE_COUNT).apply {
-        this[2] = -2; this[5] = -3; this[9] = 2; this[13] = -3; this[17] = -3
-    }
+
     private val CAVE_SKIP = 20   // 分岐マスから何マス先に復帰するか
 
     // ================= ステージ定義 =================
     private val stages: List<Stage> by lazy {
         listOf(
+            // ---------------- ステージ1: もりのまち（背景=森）----------------
             Stage(
-                "もりのまち",
+                "もりのまち", R.drawable.bg_forest,
                 mapOf(
                     2 to GameEvent(R.drawable.bg_famiresu, "レストランななで ごはんを食べた。\n満腹15　友情5", 15, 0, 5, 3),
+                    3 to GameEvent(R.drawable.bg_park2, "ひろい こうえんで はしりまわった。\n充実10", 0, 10, 0, 3),
                     4 to GameEvent(R.drawable.bg_beach, "みんなで海へ行った。\n満腹5　友情10", 5, 0, 10, 3),
                     6 to GameEvent(R.drawable.bg_park, "こうえんで 楽しく遊んだ。\n充実10", 0, 10, 0, 1),
                     7 to weddingEvent,
+                    8 to GameEvent(R.drawable.bg_hanami, "おはなみを した。\n満腹10　充実15　2マス すすむ", 10, 15, 0, 4, dMove = 2),
                     9 to GameEvent(R.drawable.bg_yasai, "無人野菜販売所で 野菜を買った。\n満腹10　充実5", 10, 5, 0, 1),
-                    11 to GameEvent(R.drawable.bg_pool, "プールで たくさん泳いだ。\n満腹-5　充実10　友情5", -5, 10, 5, 3),
+                    11 to GameEvent(R.drawable.bg_pool, "プールで およぎすぎた。\n満腹-5　充実10　3マス もどる", -5, 10, 5, 3, dMove = -3),
+                    12 to GameEvent(R.drawable.bg_sakura_river, "かわぞいの さくらを 見た。\n充実20", 0, 20, 0, 2),
                     13 to GameEvent(R.drawable.bg_library, "図書館で しずかに本を読んだ。\n充実15", 0, 15, 0, 1),
                     14 to birthEvent,
                     15 to GameEvent(R.drawable.bg_cafe, "喫茶店ななで ひとやすみ。\n満腹8　充実8", 8, 8, 0, 2),
-                    18 to GameEvent(R.drawable.bg_ground, "グラウンドで みんなと運動した。\n満腹-5　友情15", -5, 0, 15, 4),
+                    17 to GameEvent(R.drawable.bg_woodhouse, "もりの おうちで やすんだ。\n満腹10　充実10", 10, 10, 0, 2),
+                    18 to GameEvent(R.drawable.bg_ground, "グラウンドで はしった。\n満腹-5　友情15　2マス もどる", -5, 0, 15, 4, dMove = -2),
                     19 to weddingEvent,
                     22 to GameEvent(R.drawable.bg_cinema, "映画館で 映画を見た。\n充実12　友情8", 0, 12, 8, 2),
                     23 to birthEvent,
-                    26 to GameEvent(R.drawable.bg_cabin, "山のログハウスに とまった。\n満腹10　充実10　友情10", 10, 10, 10, 4)
+                    26 to GameEvent(R.drawable.bg_cabin, "山のログハウスに とまった。\n満腹10　充実10　友情10　3マス すすむ", 10, 10, 10, 4, dMove = 3)
                 ),
-                IntArray(30).apply {
-                    this[3] = -2; this[8] = -3; this[10] = 2; this[12] = -3; this[16] = -2
-                    this[20] = 2; this[21] = -3; this[24] = -4; this[27] = -3; this[28] = -2
-                },
                 branchCell = 5
             ),
+            // ---------------- ステージ2: とかいのステージ（背景=都心）----------------
             Stage(
-                "たびのステージ",
+                "とかいのステージ", R.drawable.bg_city,
                 mapOf(
                     2 to GameEvent(R.drawable.bg_bus, "バスに のって おでかけ。\n充実5　友情5", 0, 5, 5, 3),
+                    3 to GameEvent(R.drawable.bg_town, "まちを ぶらぶら あるいた。\n充実8", 0, 8, 0, 2),
                     4 to GameEvent(R.drawable.bg_train, "でんしゃで うみぞいを たびした。\n充実10　友情5", 0, 10, 5, 3),
-                    6 to GameEvent(R.drawable.bg_airport, "くうこうから しゅっぱつ！\n充実15", 0, 15, 0, 1),
+                    6 to GameEvent(R.drawable.bg_airport, "くうこうから しゅっぱつ！\n充実15　2マス すすむ", 0, 15, 0, 1, dMove = 2),
                     8 to weddingEvent,
                     9 to GameEvent(R.drawable.bg_paris, "パリの エッフェルとうを 見た。\n充実25　友情10", 0, 25, 10, 2),
+                    10 to GameEvent(R.drawable.bg_citystation, "よるの えきに ついた。\n充実12", 0, 12, 0, 2),
                     12 to GameEvent(R.drawable.bg_ship, "ごうかきゃくせんに のった。\n満腹20　充実20", 20, 20, 0, 2),
                     13 to birthEvent,
                     15 to GameEvent(R.drawable.bg_onsen, "ゆのやどで おんせんに つかった。\n満腹15　充実15", 15, 15, 0, 2),
+                    16 to GameEvent(R.drawable.bg_countrystation, "あさの えきで でんしゃを まった。\n充実10　2マス もどる", 0, 10, 0, 1, dMove = -2),
                     18 to GameEvent(R.drawable.bg_ryokan, "ふるい りょかんに とまった。\n充実15　友情10", 0, 15, 10, 3),
+                    19 to GameEvent(R.drawable.bg_schoolyard, "なつかしい がっこうを たずねた。\n友情12", 0, 0, 12, 3),
                     20 to weddingEvent,
-                    22 to GameEvent(R.drawable.bg_mountain, "やまに のぼった。\n満腹-10　充実20　友情15", -10, 20, 15, 4),
+                    22 to GameEvent(R.drawable.bg_mountain, "やまに のぼった。\n満腹-10　充実20　友情15　3マス もどる", -10, 20, 15, 4, dMove = -3),
                     24 to birthEvent,
-                    26 to GameEvent(R.drawable.bg_ski, "スキーで すべった。\n満腹-5　充実20　友情15", -5, 20, 15, 4)
+                    26 to GameEvent(R.drawable.bg_ski, "スキーで すべった。\n満腹-5　充実20　友情15　2マス すすむ", -5, 20, 15, 4, dMove = 2)
                 ),
-                IntArray(30).apply {
-                    this[3] = -2; this[5] = -3; this[10] = -2; this[11] = -3; this[14] = 2
-                    this[16] = -3; this[17] = -2; this[21] = -4; this[23] = -2; this[25] = 2
-                    this[27] = -3; this[28] = -3
-                },
                 branchCell = 7
             ),
+            // ---------------- ステージ3: すなはまのステージ（背景=砂浜）----------------
             Stage(
-                "あそびのステージ",
+                "すなはまのステージ", R.drawable.bg_sand,
                 mapOf(
                     2 to GameEvent(R.drawable.bg_mall, "モールで かいものした。\n満腹10　充実10", 10, 10, 0, 2),
-                    4 to GameEvent(R.drawable.bg_amusement, "ゆうえんちで あそんだ。\n充実20　友情15", 0, 20, 15, 4),
+                    4 to GameEvent(R.drawable.bg_amusement, "ゆうえんちで あそんだ。\n充実20　友情15　2マス すすむ", 0, 20, 15, 4, dMove = 2),
+                    5 to GameEvent(R.drawable.bg_bowling, "ボウリングで しょうぶした。\n友情15", 0, 0, 15, 3),
                     6 to weddingEvent,
                     7 to GameEvent(R.drawable.bg_ferris, "かんらんしゃで ゆうやけを 見た。\n充実25　友情10", 0, 25, 10, 2),
-                    10 to GameEvent(R.drawable.bg_waterpark, "ウォーターパークで あそんだ。\n満腹-5　充実20　友情15", -5, 20, 15, 4),
+                    9 to GameEvent(R.drawable.bg_cathedral, "おおきな きょうかいを 見た。\n充実18", 0, 18, 0, 2),
+                    10 to GameEvent(R.drawable.bg_waterpark, "ウォーターパークで あそんだ。\n満腹-5　充実20　友情15　3マス もどる", -5, 20, 15, 4, dMove = -3),
                     12 to birthEvent,
                     13 to GameEvent(R.drawable.bg_gym, "たいいくかんで あそんだ。\n満腹-5　友情20", -5, 0, 20, 4),
-                    16 to GameEvent(R.drawable.bg_sickroom, "かぜを ひいて にゅういん…。\n満腹-15　充実-15", -15, -15, 0, 1),
+                    15 to GameEvent(R.drawable.bg_rainschool, "あめで そとに でられない…。\n充実-10　2マス もどる", 0, -10, 0, 1, dMove = -2),
+                    16 to GameEvent(R.drawable.bg_sickroom, "かぜを ひいて にゅういん…。\n満腹-15　充実-15　3マス もどる", -15, -15, 0, 1, dMove = -3),
                     18 to weddingEvent,
                     19 to GameEvent(R.drawable.bg_cinema, "えいがを 見た。\n充実12　友情8", 0, 12, 8, 2),
+                    21 to GameEvent(R.drawable.bg_mall2, "あたらしい モールへ 行った。\n満腹12　充実12", 12, 12, 0, 2),
                     22 to GameEvent(R.drawable.bg_famiresu, "レストランで ごはんを 食べた。\n満腹15　友情5", 15, 0, 5, 3),
                     24 to birthEvent,
                     25 to GameEvent(R.drawable.bg_cafe, "きっさてんで ひとやすみ。\n満腹8　充実8", 8, 8, 0, 2),
                     27 to GameEvent(R.drawable.bg_park, "こうえんで あそんだ。\n充実10", 0, 10, 0, 1)
                 ),
-                IntArray(30).apply {
-                    this[3] = -2; this[5] = -3; this[8] = -3; this[9] = 2; this[11] = -3
-                    this[14] = -4; this[15] = 3; this[17] = -3; this[20] = -2; this[21] = 2
-                    this[23] = -3; this[26] = -3; this[28] = -4
-                },
                 branchCell = 1
             )
         )
@@ -244,12 +251,10 @@ class MainActivity : Activity() {
 
     /** 現在のステージ定義を盤面へ反映 */
     private fun applyStage() {
-        Board.moves = stage.moves
         Board.normalEventCells = stage.events.filterValues { it.kind == EventKind.NORMAL }.keys
         Board.weddingCells = stage.events.filterValues { it.kind == EventKind.WEDDING }.keys
         Board.birthCells = stage.events.filterValues { it.kind == EventKind.BIRTH }.keys
         Board.branchCell = stage.branchCell
-        Board.caveMoves = caveMoves
         Board.caveEventCells = caveEvents.keys
     }
 
@@ -287,6 +292,11 @@ class MainActivity : Activity() {
     // ---------------- キャラ選択画面 ----------------
     private fun showCharaSelect() {
         handler.removeCallbacksAndMessages(null)
+        showCharaGrid("1P の キャラクターを えらんでね", charas) { c -> showCountSelect(c) }
+    }
+
+    /** キャラ選択のグリッドを表示する共通処理 */
+    private fun showCharaGrid(title: String, options: List<Chara>, onPick: (Chara) -> Unit) {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
@@ -294,7 +304,7 @@ class MainActivity : Activity() {
             setPadding(dp(16), dp(24), dp(16), dp(16))
         }
         root.addView(TextView(this).apply {
-            text = "じぶんの キャラクターを えらんでね"
+            text = title
             textSize = 20f
             setTextColor(Color.parseColor("#33691E"))
             gravity = Gravity.CENTER
@@ -303,7 +313,7 @@ class MainActivity : Activity() {
         })
         val grid = GridLayout(this).apply { rowCount = 2; columnCount = 2 }
         val cellSize = min(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels) / 2 - dp(32)
-        for (c in charas) {
+        for (c in options) {
             val cell = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
@@ -314,7 +324,7 @@ class MainActivity : Activity() {
                 scaleType = ImageView.ScaleType.FIT_CENTER
                 background = roundedBg(Color.WHITE, Color.parseColor("#A5D6A7"))
                 layoutParams = LinearLayout.LayoutParams(cellSize, cellSize)
-                setOnClickListener { showCountSelect(c) }
+                setOnClickListener { onPick(c) }
             })
             cell.addView(TextView(this).apply {
                 text = c.name
@@ -332,9 +342,9 @@ class MainActivity : Activity() {
     private fun showCountSelect(myChara: Chara) {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
+            gravity = Gravity.CENTER_HORIZONTAL
             setBackgroundColor(Color.parseColor("#E8F5E9"))
-            setPadding(dp(32), dp(24), dp(32), dp(24))
+            setPadding(dp(24), dp(20), dp(24), dp(20))
         }
         root.addView(TextView(this).apply {
             text = "なんびきで あそぶ？"
@@ -342,36 +352,69 @@ class MainActivity : Activity() {
             setTextColor(Color.parseColor("#33691E"))
             gravity = Gravity.CENTER
             typeface = Typeface.DEFAULT_BOLD
-            setPadding(0, 0, 0, dp(8))
+            setPadding(0, 0, 0, dp(6))
         })
         root.addView(TextView(this).apply {
-            text = "きみは ${myChara.name}！ ほかのなかまは コンピュータだよ"
-            textSize = 14f
+            text = "1P は ${myChara.name}。\nにんげん ふたりのときは 1だいのスマホを じゅんばんに つかうよ"
+            textSize = 13f
             setTextColor(Color.parseColor("#558B2F"))
             gravity = Gravity.CENTER
-            setPadding(0, 0, 0, dp(16))
+            setPadding(0, 0, 0, dp(14))
         })
-        val others = charas.filter { it != myChara }
-        for (n in 1..4) {
-            val label = if (n == 1) "ひとりで あそぶ" else "${n}ひきで あそぶ（CPU ${n - 1}ひき）"
+        // Triple(合計人数, 人間の人数, ボタン表示)
+        val combos = listOf(
+            Triple(1, 1, "ひとりで あそぶ"),
+            Triple(2, 1, "2ひき　1P ＋ CPU1"),
+            Triple(2, 2, "2ひき　1P ＋ 2P（ふたりで）"),
+            Triple(3, 1, "3ひき　1P ＋ CPU2"),
+            Triple(3, 2, "3ひき　1P ＋ 2P ＋ CPU1"),
+            Triple(4, 1, "4ひき　1P ＋ CPU3"),
+            Triple(4, 2, "4ひき　1P ＋ 2P ＋ CPU2")
+        )
+        for ((total, humans, label) in combos) {
             root.addView(Button(this).apply {
                 text = label
-                textSize = 18f
+                textSize = 17f
+                setTextColor(Color.WHITE)
+                background = roundedBg(
+                    if (humans == 2) Color.parseColor("#00897B") else Color.parseColor("#7CB342")
+                )
+                setPadding(dp(8), dp(12), dp(8), dp(12))
                 setOnClickListener {
-                    players.clear()
-                    players.add(Player(myChara, isHuman = true))
-                    for (i in 0 until n - 1) players.add(Player(others[i], isHuman = false))
-                    turn = 0
-                    stageIndex = 0
-                    applyStage()
-                    showGame()
+                    if (humans == 2) showSecondPlayerSelect(myChara, total)
+                    else buildPlayers(myChara, null, total)
                 }
             }, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dp(10) })
+            ).apply { topMargin = dp(8) })
         }
-        setContentView(root)
+        setContentView(ScrollView(this).apply { addView(root) })
+    }
+
+    /** 2人目の人間プレイヤーのキャラを選ぶ */
+    private fun showSecondPlayerSelect(firstChara: Chara, total: Int) {
+        showCharaGrid("2P の キャラクターを えらんでね", charas.filter { it != firstChara }) { c ->
+            buildPlayers(firstChara, c, total)
+        }
+    }
+
+    /** プレイヤー構成を作ってゲーム開始 */
+    private fun buildPlayers(p1: Chara, p2: Chara?, total: Int) {
+        players.clear()
+        players.add(Player(p1, isHuman = true, humanNo = 1))
+        if (p2 != null) players.add(Player(p2, isHuman = true, humanNo = 2))
+        val used = players.map { it.chara }.toSet()
+        val rest = charas.filter { it !in used }
+        var i = 0
+        while (players.size < total && i < rest.size) {
+            players.add(Player(rest[i], isHuman = false))
+            i++
+        }
+        turn = 0
+        stageIndex = 0
+        applyStage()
+        showGame()
     }
 
     // ---------------- ゲーム画面 ----------------
@@ -381,7 +424,7 @@ class MainActivity : Activity() {
             setBackgroundColor(Color.parseColor("#E8F5E9"))
         }
 
-        boardView = BoardView(this, players)
+        boardView = BoardView(this, players, stage.bgRes)
         root.addView(boardView, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
         ))
@@ -392,7 +435,7 @@ class MainActivity : Activity() {
             setPadding(dp(12), 0, dp(12), 0)
         }
         infoRow.addView(TextView(this).apply {
-            text = "ステージ${stageIndex + 1}/${stages.size}「${stage.name}」\n🔵すすむ 🔴もどる ⭐イベント 💒けっこん 👶あかちゃん\nむらさきの「あな」= どうくつルートへ分岐"
+            text = "ステージ${stageIndex + 1}/${stages.size}「${stage.name}」\n⭐イベント 💒けっこん 👶あかちゃん 「あな」どうくつへ\nすすむ・もどるは イベントの中でおきるよ"
             textSize = 11f
             setTextColor(Color.parseColor("#558B2F"))
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
@@ -503,18 +546,26 @@ class MainActivity : Activity() {
         startTurn()
     }
 
+    /** 表示名。人間が2人いるときは 1P/2P を付ける */
+    private fun who(p: Player): String = when {
+        !p.isHuman -> "${p.chara.name}（CPU）"
+        players.count { it.isHuman } >= 2 -> "${p.chara.name}（${p.humanNo}P）"
+        else -> "${p.chara.name}（きみ）"
+    }
+
     private fun updateSpeedLabel() {
         speedButton.text = if (Speed.fast) "はやさ: はやい⚡" else "はやさ: ふつう"
     }
 
     private fun updateStatsBar() {
-        val me = players.firstOrNull { it.isHuman } ?: return
+        val me = players.getOrNull(turn) ?: return
         val bonus = StringBuilder()
         if (me.hasChild) bonus.append("　👶x${Skill.CHILD_MULTIPLIER}")
         else if (me.married) bonus.append("　💍x${Skill.MARRIED_MULTIPLIER}")
         if (me.yuujou >= Skill.YUUJOU_THRESHOLD) bonus.append("　🤝+${Skill.YUUJOU_BONUS}")
         if (me.boostNext) bonus.append("　🍖+${Skill.MANPUKU_BONUS}")
-        statsBar.text = "満腹 ${me.manpuku}　　充実 ${me.juujitsu}　　友情 ${me.yuujou}$bonus"
+        val tag = if (me.isHuman && players.count { it.isHuman } >= 2) "${me.humanNo}P " else ""
+        statsBar.text = "$tag満腹 ${me.manpuku}　　充実 ${me.juujitsu}　　友情 ${me.yuujou}$bonus"
     }
 
     private fun updateSkillButtons() {
@@ -530,8 +581,7 @@ class MainActivity : Activity() {
     private fun showStatusDialog() {
         val sb = StringBuilder("ステージ${stageIndex + 1}/${stages.size}「${stage.name}」\n\n")
         for (p in players.sortedByDescending { it.total }) {
-            val who = if (p.isHuman) "${p.chara.name}（きみ）" else "${p.chara.name}（CPU）"
-            sb.append("$who　ごうけい ${p.total}\n")
+            sb.append("${who(p)}　ごうけい ${p.total}\n")
             val where = if (p.inCave) "どうくつ" else "ほんせん"
             sb.append("  $where ${p.position} / ${Board.goal(p.inCave)}\n")
             sb.append("  満腹 ${p.manpuku}　充実 ${p.juujitsu}　友情 ${p.yuujou}\n")
@@ -580,14 +630,14 @@ class MainActivity : Activity() {
             for (other in players) {
                 if (other !== p) other.position = (other.position - Skill.JUUJITSU_PUSH).coerceAtLeast(0)
             }
-            statusText.text = "✨ ${p.chara.name} が みんなを ${Skill.JUUJITSU_PUSH}マス もどした！"
+            statusText.text = "✨ ${who(p)} が みんなを ${Skill.JUUJITSU_PUSH}マス もどした！"
             boardView.invalidate()
             updateStatsBar()
         }
         if (p.manpuku >= Skill.MANPUKU_COST && !p.boostNext && Random.nextFloat() < 0.5f) {
             p.manpuku -= Skill.MANPUKU_COST
             p.boostNext = true
-            statusText.text = "🍖 ${p.chara.name} が パワーアップ！"
+            statusText.text = "🍖 ${who(p)} が パワーアップ！"
         }
     }
 
@@ -609,13 +659,13 @@ class MainActivity : Activity() {
         boardView.world = p.inCave
         boardView.focusCell(p.position, slow = true)
         if (p.isHuman) {
-            statusText.text = "きみ（${p.chara.name}）のばん！ スタートを おしてね"
+            statusText.text = "${who(p)}のばん！ スタートを おしてね"
             rouletteView.locked = false
             startButton.isEnabled = true
             boardView.panEnabled = true
             updateSkillButtons()
         } else {
-            statusText.text = "${p.chara.name}（CPU）のばん…"
+            statusText.text = "${who(p)}のばん…"
             rouletteView.locked = true
             startButton.isEnabled = false
             boardView.panEnabled = false
@@ -695,14 +745,7 @@ class MainActivity : Activity() {
             showEvent(p, ev)
             return
         }
-        val mv = Board.movesOf(p.inCave)[p.position]
-        if (mv != 0 && !fromEvent) {
-            statusText.text = if (mv > 0) "${p.chara.name} は ${mv}マス すすむ！"
-                              else "${p.chara.name} は ${-mv}マス もどる…"
-            handler.postDelayed({ movePiece(p, mv, fromEvent = true) }, Speed.eventWaitMs)
-        } else {
-            nextTurn()
-        }
+        nextTurn()
     }
 
     // ---------------- 洞窟ルート ----------------
@@ -787,8 +830,6 @@ class MainActivity : Activity() {
         winner.juujitsu = (winner.juujitsu + Skill.CLEAR_BONUS).coerceIn(0, 999)
         winner.yuujou = (winner.yuujou + Skill.CLEAR_BONUS).coerceIn(0, 999)
         updateStatsBar()
-        val who = if (winner.isHuman) "きみ（${winner.chara.name}）" else "${winner.chara.name}（CPU）"
-
         if (stageIndex >= stages.size - 1) {
             showFinalResult(winner)
             return
@@ -797,7 +838,7 @@ class MainActivity : Activity() {
         AlertDialog.Builder(this)
             .setTitle("🎉 ステージ${stageIndex + 1} クリア！")
             .setMessage(
-                "$who が 1ばんに ゴール！\n" +
+                "${who(winner)} が 1ばんに ゴール！\n" +
                 "1ちゃくボーナス 充実+${Skill.CLEAR_BONUS}　友情+${Skill.CLEAR_BONUS}\n\n" +
                 "つぎは「${next.name}」！\nみんなで すすもう。\n" +
                 "（ステータス・けっこん・こどもは そのまま）"
@@ -816,11 +857,10 @@ class MainActivity : Activity() {
     private fun showFinalResult(winner: Player) {
         val ranking = players.sortedByDescending { it.total }
         val sb = StringBuilder()
-        val who = if (winner.isHuman) "きみ（${winner.chara.name}）" else "${winner.chara.name}（CPU）"
-        sb.append("さいごに ゴールしたのは $who！\n\n【 ごうけいスコア 】\n")
+        sb.append("さいごに ゴールしたのは ${who(winner)}！\n\n【 ごうけいスコア 】\n")
         for ((i, p) in ranking.withIndex()) {
             val medal = when (i) { 0 -> "🥇"; 1 -> "🥈"; 2 -> "🥉"; else -> "　" }
-            val name = if (p.isHuman) "${p.chara.name}（きみ）" else p.chara.name
+            val name = who(p)
             val fam = when {
                 p.hasChild -> " 👶"
                 p.married -> " 💍"
@@ -942,7 +982,13 @@ class MainActivity : Activity() {
                 if (ev.kind == EventKind.WEDDING) p.married = true
                 if (ev.kind == EventKind.BIRTH) p.hasChild = true
                 updateStatsBar()
-                nextTurn()
+                if (ev.dMove != 0) {
+                    statusText.text = if (ev.dMove > 0) "${p.chara.name} は ${ev.dMove}マス すすむ！"
+                                      else "${p.chara.name} は ${-ev.dMove}マス もどる…"
+                    handler.postDelayed({ movePiece(p, ev.dMove, fromEvent = true) }, Speed.eventWaitMs)
+                } else {
+                    nextTurn()
+                }
             }
             .show()
     }
@@ -952,22 +998,22 @@ class MainActivity : Activity() {
         const val MAIN_COUNT = 30
         const val CAVE_COUNT = 20
 
-        /** +n=nマスすすむ / -n=nマスもどる / 0=通常。ステージ切替時に applyStage() が差し替える */
-        var moves: IntArray = IntArray(MAIN_COUNT)
         var normalEventCells: Set<Int> = emptySet()
         var weddingCells: Set<Int> = emptySet()
         var birthCells: Set<Int> = emptySet()
         var branchCell: Int = -1
 
-        var caveMoves: IntArray = IntArray(CAVE_COUNT)
         var caveEventCells: Set<Int> = emptySet()
 
         fun count(cave: Boolean) = if (cave) CAVE_COUNT else MAIN_COUNT
         fun goal(cave: Boolean) = count(cave) - 1
-        fun movesOf(cave: Boolean) = if (cave) caveMoves else moves
     }
 
-    class BoardView(context: Context, private val players: List<Player>) : View(context) {
+    class BoardView(
+        context: Context,
+        private val players: List<Player>,
+        mainBgRes: Int
+    ) : View(context) {
         var turnIndex = 0
         var panEnabled = false
 
@@ -991,8 +1037,12 @@ class MainActivity : Activity() {
             .associateWith { BitmapFactory.decodeResource(resources, it) }
         private val childBitmaps: Map<Int, Bitmap> = players.map { it.chara.childRes }.distinct()
             .associateWith { BitmapFactory.decodeResource(resources, it) }
-        private val forest: Bitmap = BitmapFactory.decodeResource(resources, R.drawable.bg_forest)
+        private val mainBg: Bitmap = BitmapFactory.decodeResource(resources, mainBgRes)
         private val cave: Bitmap = BitmapFactory.decodeResource(resources, R.drawable.bg_cave)
+        // マスの目印
+        private val markCave: Bitmap = BitmapFactory.decodeResource(resources, R.drawable.mark_cave)
+        private val markChapel: Bitmap = BitmapFactory.decodeResource(resources, R.drawable.mark_chapel)
+        private val markHeart: Bitmap = BitmapFactory.decodeResource(resources, R.drawable.mark_heart)
 
         private var camX = 0f
         private var camAnim: ValueAnimator? = null
@@ -1005,8 +1055,6 @@ class MainActivity : Activity() {
             color = Color.parseColor("#C9A66B"); strokeWidth = 26f; strokeCap = Paint.Cap.ROUND
         }
         private val cellPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FFF8E1") }
-        private val fwdPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#81D4FA") }
-        private val backPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#EF9A9A") }
         private val eventPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#CE93D8") }
         private val weddingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#F8BBD0") }
         private val babyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FFE082") }
@@ -1109,7 +1157,7 @@ class MainActivity : Activity() {
 
         /** 森の背景。カメラの0.25倍でパララックス、左右反転しながら並べて継ぎ目なくループ */
         private fun drawForest(canvas: Canvas) {
-            val bmp = if (world) cave else forest
+            val bmp = if (world) cave else mainBg
             val scale = height.toFloat() / bmp.height
             val tileW = bmp.width * scale
             if (tileW <= 0f) return
@@ -1134,26 +1182,16 @@ class MainActivity : Activity() {
         private fun lockedBirth(i: Int): Boolean =
             !world && i in Board.birthCells && players.none { it.married }
 
-        private fun cellFill(i: Int): Paint {
-            val mv = Board.movesOf(world)[i]
-            return when {
-                i == 0 -> startPaint
-                i == goalIndex -> goalPaint
-                world -> when {
-                    i in Board.caveEventCells -> eventPaint
-                    mv > 0 -> fwdPaint
-                    mv < 0 -> backPaint
-                    else -> cellPaint
-                }
-                i == Board.branchCell -> branchPaint
-                lockedBirth(i) -> cellPaint
-                i in Board.birthCells -> babyPaint
-                i in Board.weddingCells -> weddingPaint
-                i in Board.normalEventCells -> eventPaint
-                mv > 0 -> fwdPaint
-                mv < 0 -> backPaint
-                else -> cellPaint
-            }
+        private fun cellFill(i: Int): Paint = when {
+            i == 0 -> startPaint
+            i == goalIndex -> goalPaint
+            world -> if (i in Board.caveEventCells) eventPaint else cellPaint
+            i == Board.branchCell -> branchPaint
+            lockedBirth(i) -> cellPaint
+            i in Board.birthCells -> babyPaint
+            i in Board.weddingCells -> weddingPaint
+            i in Board.normalEventCells -> eventPaint
+            else -> cellPaint
         }
 
         private fun drawTrack(canvas: Canvas) {
@@ -1166,9 +1204,25 @@ class MainActivity : Activity() {
 
             canvas.drawLine(worldX(0), laneY, worldX(cellCount - 1), laneY, pathPaint)
 
+            // 目印（洞窟の入口・チャペル・ハート）をマスの後ろに立てる
+            if (!world) {
+                for (i in first..last) {
+                    val mark = when {
+                        i == Board.branchCell -> markCave
+                        i in Board.weddingCells -> markChapel
+                        i in Board.birthCells && !lockedBirth(i) -> markHeart
+                        else -> null
+                    } ?: continue
+                    val ms = cellR * 2.3f
+                    val mx = worldX(i)
+                    val mb = laneY - cellR * 0.35f
+                    canvas.drawBitmap(mark, null,
+                        RectF(mx - ms / 2, mb - ms, mx + ms / 2, mb), null)
+                }
+            }
+
             for (i in first..last) {
                 val x = worldX(i)
-                val mv = Board.movesOf(world)[i]
                 val eventCells = if (world) Board.caveEventCells else Board.normalEventCells
                 canvas.drawCircle(x, laneY, cellR, cellFill(i))
                 canvas.drawCircle(x, laneY, cellR, cellEdge)
@@ -1181,7 +1235,6 @@ class MainActivity : Activity() {
                     !world && i in Board.birthCells -> canvas.drawText("👶", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
                     !world && i in Board.weddingCells -> canvas.drawText("💒", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
                     i in eventCells -> canvas.drawText("⭐", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
-                    mv != 0 -> canvas.drawText(if (mv > 0) "+$mv" else "$mv", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
                     else -> canvas.drawText("$i", x, laneY + textPaint.textSize / 3, textPaint)
                 }
             }
@@ -1314,6 +1367,22 @@ class MainActivity : Activity() {
 
         private var resultScale = 1f
 
+        /**
+         * 「ふつう」用の回転カーブ。
+         * 前半72%の時間で回転量の88.5%を ほぼ等速の速いスピードで消化し、
+         * 残り28%の時間で 一気に減速して止まる（切り替わりで速度が連続するよう係数を調整）。
+         */
+        private val snapSpin = TimeInterpolator { t ->
+            val k = 0.72f
+            val a = 0.885f
+            if (t < k) t / k * a
+            else {
+                val u = (t - k) / (1f - k)
+                val inv = 1f - u
+                a + (1f - a) * (1f - inv * inv * inv)
+            }
+        }
+
         init {
             setOnClickListener { if (!locked) spin() }
         }
@@ -1330,7 +1399,8 @@ class MainActivity : Activity() {
             val to = from - (from % 360f) + 360f * turns + (330f - (result - 1) * 60f)
             ValueAnimator.ofFloat(0f, 1f).apply {
                 duration = Speed.spinMs
-                interpolator = DecelerateInterpolator(2.2f)
+                // ふつう=直前まで速く回して急停止 / はやい=短いので従来どおりなめらかに減速
+                interpolator = if (Speed.fast) DecelerateInterpolator(2.2f) else snapSpin
                 addUpdateListener {
                     rotation2 = from + (to - from) * (it.animatedValue as Float)
                     invalidate()
