@@ -1,0 +1,546 @@
+{
+  "schemaVersion": 1,
+  "mainCellCount": 30,
+  "shared": {
+    "wedding": {
+      "bg": "bg_chapel",
+      "message": "きょうかいで けっこんしきを あげた！\nこれから ずっと いっしょ。\n満腹10　充実20　友情20\n\n💍 これから イベントの うれしさが 1.5ばい！",
+      "manpuku": 10,
+      "juujitsu": 20,
+      "yuujou": 20,
+      "group": 1,
+      "move": 0
+    },
+    "birth": {
+      "bg": "bg_hospital",
+      "message": "びょういんで あかちゃんが うまれた！\nさんにん かぞくに なった。\n満腹15　充実30　友情30\n\n👶 これから イベントの うれしさが 2ばい！",
+      "manpuku": 15,
+      "juujitsu": 30,
+      "yuujou": 30,
+      "group": 1,
+      "move": 0
+    }
+  },
+  "stages": [
+    {
+      "name": "もりのまち",
+      "bg": "bg_forest",
+      "branchCell": 5,
+      "events": [
+        {
+          "cell": 2,
+          "bg": "bg_famiresu",
+          "kind": "normal",
+          "message": "レストランななで ごはんを食べた。\n満腹15　友情5",
+          "manpuku": 15,
+          "juujitsu": 0,
+          "yuujou": 5,
+          "group": 3,
+          "move": 0
+        },
+        {
+          "cell": 3,
+          "bg": "bg_park2",
+          "kind": "normal",
+          "message": "ひろい こうえんで はしりまわった。\n充実10",
+          "manpuku": 0,
+          "juujitsu": 10,
+          "yuujou": 0,
+          "group": 3,
+          "move": 0
+        },
+        {
+          "cell": 4,
+          "bg": "bg_beach",
+          "kind": "normal",
+          "message": "みんなで海へ行った。\n満腹5　友情10",
+          "manpuku": 5,
+          "juujitsu": 0,
+          "yuujou": 10,
+          "group": 3,
+          "move": 0
+        },
+        {
+          "cell": 6,
+          "bg": "bg_park",
+          "kind": "normal",
+          "message": "こうえんで 楽しく遊んだ。\n充実10",
+          "manpuku": 0,
+          "juujitsu": 10,
+          "yuujou": 0,
+          "group": 1,
+          "move": 0
+        },
+        {
+          "cell": 7,
+          "kind": "wedding"
+        },
+        {
+          "cell": 8,
+          "bg": "bg_hanami",
+          "kind": "normal",
+          "message": "おはなみを した。\n満腹10　充実15　2マス すすむ",
+          "manpuku": 10,
+          "juujitsu": 15,
+          "yuujou": 0,
+          "group": 4,
+          "move": 2
+        },
+        {
+          "cell": 9,
+          "bg": "bg_yasai",
+          "kind": "normal",
+          "message": "無人野菜販売所で 野菜を買った。\n満腹10　充実5",
+          "manpuku": 10,
+          "juujitsu": 5,
+          "yuujou": 0,
+          "group": 1,
+          "move": 0
+        },
+        {
+          "cell": 11,
+          "bg": "bg_pool",
+          "kind": "normal",
+          "message": "プールで およぎすぎた。\n満腹-5　充実10　3マス もどる",
+          "manpuku": -5,
+          "juujitsu": 10,
+          "yuujou": 5,
+          "group": 3,
+          "move": -3
+        },
+        {
+          "cell": 12,
+          "bg": "bg_sakura_river",
+          "kind": "normal",
+          "message": "かわぞいの さくらを 見た。\n充実20",
+          "manpuku": 0,
+          "juujitsu": 20,
+          "yuujou": 0,
+          "group": 2,
+          "move": 0
+        },
+        {
+          "cell": 13,
+          "bg": "bg_library",
+          "kind": "normal",
+          "message": "図書館で しずかに本を読んだ。\n充実15",
+          "manpuku": 0,
+          "juujitsu": 15,
+          "yuujou": 0,
+          "group": 1,
+          "move": 0
+        },
+        {
+          "cell": 14,
+          "kind": "birth"
+        },
+        {
+          "cell": 15,
+          "bg": "bg_cafe",
+          "kind": "normal",
+          "message": "喫茶店ななで ひとやすみ。\n満腹8　充実8",
+          "manpuku": 8,
+          "juujitsu": 8,
+          "yuujou": 0,
+          "group": 2,
+          "move": 0
+        },
+        {
+          "cell": 17,
+          "bg": "bg_woodhouse",
+          "kind": "normal",
+          "message": "もりの おうちで やすんだ。\n満腹10　充実10",
+          "manpuku": 10,
+          "juujitsu": 10,
+          "yuujou": 0,
+          "group": 2,
+          "move": 0
+        },
+        {
+          "cell": 18,
+          "bg": "bg_ground",
+          "kind": "normal",
+          "message": "グラウンドで はしった。\n満腹-5　友情15　2マス もどる",
+          "manpuku": -5,
+          "juujitsu": 0,
+          "yuujou": 15,
+          "group": 4,
+          "move": -2
+        },
+        {
+          "cell": 19,
+          "kind": "wedding"
+        },
+        {
+          "cell": 22,
+          "bg": "bg_cinema",
+          "kind": "normal",
+          "message": "映画館で 映画を見た。\n充実12　友情8",
+          "manpuku": 0,
+          "juujitsu": 12,
+          "yuujou": 8,
+          "group": 2,
+          "move": 0
+        },
+        {
+          "cell": 23,
+          "kind": "birth"
+        },
+        {
+          "cell": 26,
+          "bg": "bg_cabin",
+          "kind": "normal",
+          "message": "山のログハウスに とまった。\n満腹10　充実10　友情10　3マス すすむ",
+          "manpuku": 10,
+          "juujitsu": 10,
+          "yuujou": 10,
+          "group": 4,
+          "move": 3
+        }
+      ]
+    },
+    {
+      "name": "とかいのステージ",
+      "bg": "bg_city",
+      "branchCell": 7,
+      "events": [
+        {
+          "cell": 2,
+          "bg": "bg_bus",
+          "kind": "normal",
+          "message": "バスに のって おでかけ。\n充実5　友情5",
+          "manpuku": 0,
+          "juujitsu": 5,
+          "yuujou": 5,
+          "group": 3,
+          "move": 0
+        },
+        {
+          "cell": 3,
+          "bg": "bg_town",
+          "kind": "normal",
+          "message": "まちを ぶらぶら あるいた。\n充実8",
+          "manpuku": 0,
+          "juujitsu": 8,
+          "yuujou": 0,
+          "group": 2,
+          "move": 0
+        },
+        {
+          "cell": 4,
+          "bg": "bg_train",
+          "kind": "normal",
+          "message": "でんしゃで うみぞいを たびした。\n充実10　友情5",
+          "manpuku": 0,
+          "juujitsu": 10,
+          "yuujou": 5,
+          "group": 3,
+          "move": 0
+        },
+        {
+          "cell": 6,
+          "bg": "bg_airport",
+          "kind": "normal",
+          "message": "くうこうから しゅっぱつ！\n充実15　2マス すすむ",
+          "manpuku": 0,
+          "juujitsu": 15,
+          "yuujou": 0,
+          "group": 1,
+          "move": 2
+        },
+        {
+          "cell": 8,
+          "kind": "wedding"
+        },
+        {
+          "cell": 9,
+          "bg": "bg_paris",
+          "kind": "normal",
+          "message": "パリの エッフェルとうを 見た。\n充実25　友情10",
+          "manpuku": 0,
+          "juujitsu": 25,
+          "yuujou": 10,
+          "group": 2,
+          "move": 0
+        },
+        {
+          "cell": 10,
+          "bg": "bg_citystation",
+          "kind": "normal",
+          "message": "よるの えきに ついた。\n充実12",
+          "manpuku": 0,
+          "juujitsu": 12,
+          "yuujou": 0,
+          "group": 2,
+          "move": 0
+        },
+        {
+          "cell": 12,
+          "bg": "bg_ship",
+          "kind": "normal",
+          "message": "ごうかきゃくせんに のった。\n満腹20　充実20",
+          "manpuku": 20,
+          "juujitsu": 20,
+          "yuujou": 0,
+          "group": 2,
+          "move": 0
+        },
+        {
+          "cell": 13,
+          "kind": "birth"
+        },
+        {
+          "cell": 15,
+          "bg": "bg_onsen",
+          "kind": "normal",
+          "message": "ゆのやどで おんせんに つかった。\n満腹15　充実15",
+          "manpuku": 15,
+          "juujitsu": 15,
+          "yuujou": 0,
+          "group": 2,
+          "move": 0
+        },
+        {
+          "cell": 16,
+          "bg": "bg_countrystation",
+          "kind": "normal",
+          "message": "あさの えきで でんしゃを まった。\n充実10　2マス もどる",
+          "manpuku": 0,
+          "juujitsu": 10,
+          "yuujou": 0,
+          "group": 1,
+          "move": -2
+        },
+        {
+          "cell": 18,
+          "bg": "bg_ryokan",
+          "kind": "normal",
+          "message": "ふるい りょかんに とまった。\n充実15　友情10",
+          "manpuku": 0,
+          "juujitsu": 15,
+          "yuujou": 10,
+          "group": 3,
+          "move": 0
+        },
+        {
+          "cell": 19,
+          "bg": "bg_schoolyard",
+          "kind": "normal",
+          "message": "なつかしい がっこうを たずねた。\n友情12",
+          "manpuku": 0,
+          "juujitsu": 0,
+          "yuujou": 12,
+          "group": 3,
+          "move": 0
+        },
+        {
+          "cell": 20,
+          "kind": "wedding"
+        },
+        {
+          "cell": 22,
+          "bg": "bg_mountain",
+          "kind": "normal",
+          "message": "やまに のぼった。\n満腹-10　充実20　友情15　3マス もどる",
+          "manpuku": -10,
+          "juujitsu": 20,
+          "yuujou": 15,
+          "group": 4,
+          "move": -3
+        },
+        {
+          "cell": 24,
+          "kind": "birth"
+        },
+        {
+          "cell": 26,
+          "bg": "bg_ski",
+          "kind": "normal",
+          "message": "スキーで すべった。\n満腹-5　充実20　友情15　2マス すすむ",
+          "manpuku": -5,
+          "juujitsu": 20,
+          "yuujou": 15,
+          "group": 4,
+          "move": 2
+        }
+      ]
+    },
+    {
+      "name": "すなはまのステージ",
+      "bg": "bg_sand",
+      "branchCell": 1,
+      "events": [
+        {
+          "cell": 2,
+          "bg": "bg_mall",
+          "kind": "normal",
+          "message": "モールで かいものした。\n満腹10　充実10",
+          "manpuku": 10,
+          "juujitsu": 10,
+          "yuujou": 0,
+          "group": 2,
+          "move": 0
+        },
+        {
+          "cell": 4,
+          "bg": "bg_amusement",
+          "kind": "normal",
+          "message": "ゆうえんちで あそんだ。\n充実20　友情15　2マス すすむ",
+          "manpuku": 0,
+          "juujitsu": 20,
+          "yuujou": 15,
+          "group": 4,
+          "move": 2
+        },
+        {
+          "cell": 5,
+          "bg": "bg_bowling",
+          "kind": "normal",
+          "message": "ボウリングで しょうぶした。\n友情15",
+          "manpuku": 0,
+          "juujitsu": 0,
+          "yuujou": 15,
+          "group": 3,
+          "move": 0
+        },
+        {
+          "cell": 6,
+          "kind": "wedding"
+        },
+        {
+          "cell": 7,
+          "bg": "bg_ferris",
+          "kind": "normal",
+          "message": "かんらんしゃで ゆうやけを 見た。\n充実25　友情10",
+          "manpuku": 0,
+          "juujitsu": 25,
+          "yuujou": 10,
+          "group": 2,
+          "move": 0
+        },
+        {
+          "cell": 9,
+          "bg": "bg_cathedral",
+          "kind": "normal",
+          "message": "おおきな きょうかいを 見た。\n充実18",
+          "manpuku": 0,
+          "juujitsu": 18,
+          "yuujou": 0,
+          "group": 2,
+          "move": 0
+        },
+        {
+          "cell": 10,
+          "bg": "bg_waterpark",
+          "kind": "normal",
+          "message": "ウォーターパークで あそんだ。\n満腹-5　充実20　友情15　3マス もどる",
+          "manpuku": -5,
+          "juujitsu": 20,
+          "yuujou": 15,
+          "group": 4,
+          "move": -3
+        },
+        {
+          "cell": 12,
+          "kind": "birth"
+        },
+        {
+          "cell": 13,
+          "bg": "bg_gym",
+          "kind": "normal",
+          "message": "たいいくかんで あそんだ。\n満腹-5　友情20",
+          "manpuku": -5,
+          "juujitsu": 0,
+          "yuujou": 20,
+          "group": 4,
+          "move": 0
+        },
+        {
+          "cell": 15,
+          "bg": "bg_rainschool",
+          "kind": "normal",
+          "message": "あめで そとに でられない…。\n充実-10　2マス もどる",
+          "manpuku": 0,
+          "juujitsu": -10,
+          "yuujou": 0,
+          "group": 1,
+          "move": -2
+        },
+        {
+          "cell": 16,
+          "bg": "bg_sickroom",
+          "kind": "normal",
+          "message": "かぜを ひいて にゅういん…。\n満腹-15　充実-15　3マス もどる",
+          "manpuku": -15,
+          "juujitsu": -15,
+          "yuujou": 0,
+          "group": 1,
+          "move": -3
+        },
+        {
+          "cell": 18,
+          "kind": "wedding"
+        },
+        {
+          "cell": 19,
+          "bg": "bg_cinema",
+          "kind": "normal",
+          "message": "えいがを 見た。\n充実12　友情8",
+          "manpuku": 0,
+          "juujitsu": 12,
+          "yuujou": 8,
+          "group": 2,
+          "move": 0
+        },
+        {
+          "cell": 21,
+          "bg": "bg_mall2",
+          "kind": "normal",
+          "message": "あたらしい モールへ 行った。\n満腹12　充実12",
+          "manpuku": 12,
+          "juujitsu": 12,
+          "yuujou": 0,
+          "group": 2,
+          "move": 0
+        },
+        {
+          "cell": 22,
+          "bg": "bg_famiresu",
+          "kind": "normal",
+          "message": "レストランで ごはんを 食べた。\n満腹15　友情5",
+          "manpuku": 15,
+          "juujitsu": 0,
+          "yuujou": 5,
+          "group": 3,
+          "move": 0
+        },
+        {
+          "cell": 24,
+          "kind": "birth"
+        },
+        {
+          "cell": 25,
+          "bg": "bg_cafe",
+          "kind": "normal",
+          "message": "きっさてんで ひとやすみ。\n満腹8　充実8",
+          "manpuku": 8,
+          "juujitsu": 8,
+          "yuujou": 0,
+          "group": 2,
+          "move": 0
+        },
+        {
+          "cell": 27,
+          "bg": "bg_park",
+          "kind": "normal",
+          "message": "こうえんで あそんだ。\n充実10",
+          "manpuku": 0,
+          "juujitsu": 10,
+          "yuujou": 0,
+          "group": 1,
+          "move": 0
+        }
+      ]
+    }
+  ]
+}

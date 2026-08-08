@@ -102,125 +102,55 @@ class MainActivity : Activity() {
         )
     }
 
-    // ---- 結婚・出産イベント（全ステージ共通、各ステージに2箇所ずつ配置）----
-    private val weddingEvent by lazy {
-        GameEvent(
-            R.drawable.bg_chapel,
-            "きょうかいで けっこんしきを あげた！\nこれから ずっと いっしょ。\n満腹10　充実20　友情20\n\n💍 これから イベントの うれしさが 1.5ばい！",
-            dManpuku = 10, dJuujitsu = 20, dYuujou = 20, kind = EventKind.WEDDING
-        )
-    }
-    private val birthEvent by lazy {
-        GameEvent(
-            R.drawable.bg_hospital,
-            "びょういんで あかちゃんが うまれた！\nさんにん かぞくに なった。\n満腹15　充実30　友情30\n\n👶 これから イベントの うれしさが 2ばい！",
-            dManpuku = 15, dJuujitsu = 30, dYuujou = 30, kind = EventKind.BIRTH
-        )
-    }
+    // ================= ゲームデータ（JSONから読み込み） =================
+    /** 本線ステージ（assets/stages.json） */
+    private var stages: List<Stage> = emptyList()
 
-    /** 洞窟ルート（全ステージ共通・20マス）。抜けると分岐マスの20マス先に復帰する */
-    /** 洞窟データ（assets/cave.json から読み込み。失敗時は空で安全に動く） */
+    /** 洞窟ルート（assets/cave.json）。読み込み失敗時は空マップで安全に動く */
     private var caveEvents: Map<Int, GameEvent> = emptyMap()
     private var caveCellCount: Int = Board.CAVE_COUNT
 
-    /** JSONデータを読み込む。onCreate で1回だけ呼ぶ */
-    private fun loadGameData() {
-        val res = GameData.loadCave(this)
-        caveEvents = res.data.events
-        caveCellCount = res.data.cellCount
-        CAVE_SKIP = res.data.returnSkip
-        Board.CAVE_COUNT = caveCellCount
-        if (!res.ok) {
-            // データ不備は開発中に気づけるよう画面にも出す（ゲームは続行できる）
-            Toast.makeText(
-                this,
-                "どうくつデータの警告:\n" + res.warnings.take(3).joinToString("\n"),
-                Toast.LENGTH_LONG
-            ).show()
-        }
-    }
+    /** 洞窟の盤面背景（cave.json の bg） */
+    private var caveBgRes: Int = 0
 
     /** 分岐マスから何マス先の本線に復帰するか（cave.json の returnSkip） */
     private var CAVE_SKIP = 20
 
-    // ================= ステージ定義 =================
-    private val stages: List<Stage> by lazy {
-        listOf(
-            // ---------------- ステージ1: もりのまち（背景=森）----------------
-            Stage(
-                "もりのまち", R.drawable.bg_forest,
-                mapOf(
-                    2 to GameEvent(R.drawable.bg_famiresu, "レストランななで ごはんを食べた。\n満腹15　友情5", 15, 0, 5, 3),
-                    3 to GameEvent(R.drawable.bg_park2, "ひろい こうえんで はしりまわった。\n充実10", 0, 10, 0, 3),
-                    4 to GameEvent(R.drawable.bg_beach, "みんなで海へ行った。\n満腹5　友情10", 5, 0, 10, 3),
-                    6 to GameEvent(R.drawable.bg_park, "こうえんで 楽しく遊んだ。\n充実10", 0, 10, 0, 1),
-                    7 to weddingEvent,
-                    8 to GameEvent(R.drawable.bg_hanami, "おはなみを した。\n満腹10　充実15　2マス すすむ", 10, 15, 0, 4, dMove = 2),
-                    9 to GameEvent(R.drawable.bg_yasai, "無人野菜販売所で 野菜を買った。\n満腹10　充実5", 10, 5, 0, 1),
-                    11 to GameEvent(R.drawable.bg_pool, "プールで およぎすぎた。\n満腹-5　充実10　3マス もどる", -5, 10, 5, 3, dMove = -3),
-                    12 to GameEvent(R.drawable.bg_sakura_river, "かわぞいの さくらを 見た。\n充実20", 0, 20, 0, 2),
-                    13 to GameEvent(R.drawable.bg_library, "図書館で しずかに本を読んだ。\n充実15", 0, 15, 0, 1),
-                    14 to birthEvent,
-                    15 to GameEvent(R.drawable.bg_cafe, "喫茶店ななで ひとやすみ。\n満腹8　充実8", 8, 8, 0, 2),
-                    17 to GameEvent(R.drawable.bg_woodhouse, "もりの おうちで やすんだ。\n満腹10　充実10", 10, 10, 0, 2),
-                    18 to GameEvent(R.drawable.bg_ground, "グラウンドで はしった。\n満腹-5　友情15　2マス もどる", -5, 0, 15, 4, dMove = -2),
-                    19 to weddingEvent,
-                    22 to GameEvent(R.drawable.bg_cinema, "映画館で 映画を見た。\n充実12　友情8", 0, 12, 8, 2),
-                    23 to birthEvent,
-                    26 to GameEvent(R.drawable.bg_cabin, "山のログハウスに とまった。\n満腹10　充実10　友情10　3マス すすむ", 10, 10, 10, 4, dMove = 3)
-                ),
-                branchCell = 5
-            ),
-            // ---------------- ステージ2: とかいのステージ（背景=都心）----------------
-            Stage(
-                "とかいのステージ", R.drawable.bg_city,
-                mapOf(
-                    2 to GameEvent(R.drawable.bg_bus, "バスに のって おでかけ。\n充実5　友情5", 0, 5, 5, 3),
-                    3 to GameEvent(R.drawable.bg_town, "まちを ぶらぶら あるいた。\n充実8", 0, 8, 0, 2),
-                    4 to GameEvent(R.drawable.bg_train, "でんしゃで うみぞいを たびした。\n充実10　友情5", 0, 10, 5, 3),
-                    6 to GameEvent(R.drawable.bg_airport, "くうこうから しゅっぱつ！\n充実15　2マス すすむ", 0, 15, 0, 1, dMove = 2),
-                    8 to weddingEvent,
-                    9 to GameEvent(R.drawable.bg_paris, "パリの エッフェルとうを 見た。\n充実25　友情10", 0, 25, 10, 2),
-                    10 to GameEvent(R.drawable.bg_citystation, "よるの えきに ついた。\n充実12", 0, 12, 0, 2),
-                    12 to GameEvent(R.drawable.bg_ship, "ごうかきゃくせんに のった。\n満腹20　充実20", 20, 20, 0, 2),
-                    13 to birthEvent,
-                    15 to GameEvent(R.drawable.bg_onsen, "ゆのやどで おんせんに つかった。\n満腹15　充実15", 15, 15, 0, 2),
-                    16 to GameEvent(R.drawable.bg_countrystation, "あさの えきで でんしゃを まった。\n充実10　2マス もどる", 0, 10, 0, 1, dMove = -2),
-                    18 to GameEvent(R.drawable.bg_ryokan, "ふるい りょかんに とまった。\n充実15　友情10", 0, 15, 10, 3),
-                    19 to GameEvent(R.drawable.bg_schoolyard, "なつかしい がっこうを たずねた。\n友情12", 0, 0, 12, 3),
-                    20 to weddingEvent,
-                    22 to GameEvent(R.drawable.bg_mountain, "やまに のぼった。\n満腹-10　充実20　友情15　3マス もどる", -10, 20, 15, 4, dMove = -3),
-                    24 to birthEvent,
-                    26 to GameEvent(R.drawable.bg_ski, "スキーで すべった。\n満腹-5　充実20　友情15　2マス すすむ", -5, 20, 15, 4, dMove = 2)
-                ),
-                branchCell = 7
-            ),
-            // ---------------- ステージ3: すなはまのステージ（背景=砂浜）----------------
-            Stage(
-                "すなはまのステージ", R.drawable.bg_sand,
-                mapOf(
-                    2 to GameEvent(R.drawable.bg_mall, "モールで かいものした。\n満腹10　充実10", 10, 10, 0, 2),
-                    4 to GameEvent(R.drawable.bg_amusement, "ゆうえんちで あそんだ。\n充実20　友情15　2マス すすむ", 0, 20, 15, 4, dMove = 2),
-                    5 to GameEvent(R.drawable.bg_bowling, "ボウリングで しょうぶした。\n友情15", 0, 0, 15, 3),
-                    6 to weddingEvent,
-                    7 to GameEvent(R.drawable.bg_ferris, "かんらんしゃで ゆうやけを 見た。\n充実25　友情10", 0, 25, 10, 2),
-                    9 to GameEvent(R.drawable.bg_cathedral, "おおきな きょうかいを 見た。\n充実18", 0, 18, 0, 2),
-                    10 to GameEvent(R.drawable.bg_waterpark, "ウォーターパークで あそんだ。\n満腹-5　充実20　友情15　3マス もどる", -5, 20, 15, 4, dMove = -3),
-                    12 to birthEvent,
-                    13 to GameEvent(R.drawable.bg_gym, "たいいくかんで あそんだ。\n満腹-5　友情20", -5, 0, 20, 4),
-                    15 to GameEvent(R.drawable.bg_rainschool, "あめで そとに でられない…。\n充実-10　2マス もどる", 0, -10, 0, 1, dMove = -2),
-                    16 to GameEvent(R.drawable.bg_sickroom, "かぜを ひいて にゅういん…。\n満腹-15　充実-15　3マス もどる", -15, -15, 0, 1, dMove = -3),
-                    18 to weddingEvent,
-                    19 to GameEvent(R.drawable.bg_cinema, "えいがを 見た。\n充実12　友情8", 0, 12, 8, 2),
-                    21 to GameEvent(R.drawable.bg_mall2, "あたらしい モールへ 行った。\n満腹12　充実12", 12, 12, 0, 2),
-                    22 to GameEvent(R.drawable.bg_famiresu, "レストランで ごはんを 食べた。\n満腹15　友情5", 15, 0, 5, 3),
-                    24 to birthEvent,
-                    25 to GameEvent(R.drawable.bg_cafe, "きっさてんで ひとやすみ。\n満腹8　充実8", 8, 8, 0, 2),
-                    27 to GameEvent(R.drawable.bg_park, "こうえんで あそんだ。\n充実10", 0, 10, 0, 1)
-                ),
-                branchCell = 1
+    /** JSONデータを読み込む。onCreate で1回だけ呼ぶ */
+    private fun loadGameData() {
+        val warnings = ArrayList<String>()
+
+        // 洞窟
+        val cave = GameData.loadCave(this)
+        caveEvents = cave.data.events
+        caveCellCount = cave.data.cellCount
+        CAVE_SKIP = cave.data.returnSkip
+        caveBgRes = cave.data.bgRes
+        Board.CAVE_COUNT = caveCellCount
+        warnings.addAll(cave.warnings)
+
+        // 本線ステージ
+        val st = GameData.loadStages(this)
+        stages = st.stages.map {
+            Stage(name = it.name, bgRes = it.bgRes, events = it.events, branchCell = it.branchCell)
+        }
+        Board.MAIN_COUNT = st.mainCellCount
+        warnings.addAll(st.warnings)
+
+        // ステージが1つも読めなければ最低限の空ステージを用意して起動だけは通す
+        if (stages.isEmpty()) {
+            stages = listOf(
+                Stage("ステージ1", GameData.drawableId(this, "bg_forest"), emptyMap(), -1)
             )
-        )
+        }
+
+        if (warnings.isNotEmpty()) {
+            Toast.makeText(
+                this,
+                "データの警告(${warnings.size}件):\n" + warnings.take(3).joinToString("\n"),
+                Toast.LENGTH_LONG
+            ).show()
+        }
     }
 
     private val players = ArrayList<Player>()
@@ -434,7 +364,7 @@ class MainActivity : Activity() {
             setBackgroundColor(Color.parseColor("#E8F5E9"))
         }
 
-        boardView = BoardView(this, players, stage.bgRes)
+        boardView = BoardView(this, players, stage.bgRes, caveBgRes)
         root.addView(boardView, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
         ))
@@ -583,7 +513,7 @@ class MainActivity : Activity() {
         val p = players.getOrNull(turn)
         val myTurn = p != null && p.isHuman && !rouletteView.locked
         manpukuSkillButton.isEnabled = myTurn && p!!.manpuku >= Skill.MANPUKU_COST && !p.boostNext
-        juujitsuSkillButton.isEnabled = myTurn && p!!.juujitsu >= Skill.JUUJITSU_COST && players.size > 1
+        juujitsuSkillButton.isEnabled = myTurn && p!!.juujitsu >= Skill.JUUJITSU_COST && canPushOthers(p)
         manpukuSkillButton.alpha = if (manpukuSkillButton.isEnabled) 1f else 0.4f
         juujitsuSkillButton.alpha = if (juujitsuSkillButton.isEnabled) 1f else 0.4f
     }
@@ -623,24 +553,40 @@ class MainActivity : Activity() {
 
     private fun useJuujitsuSkill() {
         val p = players[turn]
-        if (!p.isHuman || p.juujitsu < Skill.JUUJITSU_COST || players.size < 2) return
+        if (!p.isHuman || p.juujitsu < Skill.JUUJITSU_COST || !canPushOthers(p)) return
         p.juujitsu -= Skill.JUUJITSU_COST
-        for (other in players) {
-            if (other !== p) other.position = (other.position - Skill.JUUJITSU_PUSH).coerceAtLeast(0)
-        }
-        statusText.text = "✨ みんなを ${Skill.JUUJITSU_PUSH}マス もどした！"
+        val n = pushOthers(p)
+        statusText.text = "✨ ${n}ひきを ${Skill.JUUJITSU_PUSH}マス もどした！"
         boardView.invalidate()
         updateStatsBar()
         updateSkillButtons()
     }
 
-    private fun cpuUseSkills(p: Player) {
-        if (p.juujitsu >= Skill.JUUJITSU_COST && players.size > 1 && Random.nextFloat() < 0.4f) {
-            p.juujitsu -= Skill.JUUJITSU_COST
-            for (other in players) {
-                if (other !== p) other.position = (other.position - Skill.JUUJITSU_PUSH).coerceAtLeast(0)
+    /**
+     * 自分と同じ世界（本線/洞窟）にいる相手だけを後ろに下げる。
+     * 世界をまたいで作用すると、洞窟にいるプレイヤーが本線からの妨害で
+     * 洞窟のスタートまで押し戻されてしまうため必ず inCave で絞る。
+     */
+    private fun pushOthers(p: Player): Int {
+        var n = 0
+        for (other in players) {
+            if (other !== p && other.inCave == p.inCave) {
+                other.position = (other.position - Skill.JUUJITSU_PUSH).coerceAtLeast(0)
+                n++
             }
-            statusText.text = "✨ ${who(p)} が みんなを ${Skill.JUUJITSU_PUSH}マス もどした！"
+        }
+        return n
+    }
+
+    /** 同じ世界に相手がいるときだけスキルを使える */
+    private fun canPushOthers(p: Player): Boolean =
+        players.any { it !== p && it.inCave == p.inCave }
+
+    private fun cpuUseSkills(p: Player) {
+        if (p.juujitsu >= Skill.JUUJITSU_COST && canPushOthers(p) && Random.nextFloat() < 0.4f) {
+            p.juujitsu -= Skill.JUUJITSU_COST
+            val n = pushOthers(p)
+            statusText.text = "✨ ${who(p)} が ${n}ひきを ${Skill.JUUJITSU_PUSH}マス もどした！"
             boardView.invalidate()
             updateStatsBar()
         }
@@ -665,9 +611,12 @@ class MainActivity : Activity() {
 
     private fun startTurn() {
         val p = players[turn]
+        val worldChanged = boardView.world != p.inCave
         boardView.turnIndex = turn
         boardView.world = p.inCave
-        boardView.focusCell(p.position, slow = true)
+        // 世界が切り替わった直後はカメラ位置に意味がないので、アニメせず即座に合わせる
+        if (worldChanged) boardView.snapToCell(p.position)
+        else boardView.focusCell(p.position, slow = true)
         if (p.isHuman) {
             statusText.text = "${who(p)}のばん！ スタートを おしてね"
             rouletteView.locked = false
@@ -711,9 +660,11 @@ class MainActivity : Activity() {
         updateSkillButtons()
         val delta = if (steps > 0) 1 else -1
         var remaining = abs(steps)
+        // 洞窟では入口(0)まで戻さない。0はスタート地点なので「振り出しに戻った」ように見えてしまう
+        val backLimit = if (p.inCave) 1 else 0
         val stepRunnable = object : Runnable {
             override fun run() {
-                val canMove = if (delta > 0) p.position < Board.goal(p.inCave) else p.position > 0
+                val canMove = if (delta > 0) p.position < Board.goal(p.inCave) else p.position > backLimit
                 if (remaining > 0 && canMove) {
                     p.position += delta
                     boardView.focusCell(p.position, slow = false)
@@ -760,28 +711,29 @@ class MainActivity : Activity() {
 
     // ---------------- 洞窟ルート ----------------
     private fun enterCave(p: Player) {
+        if (p.inCave) return   // 二重入場の保険（本来 onLanded 側で弾かれる）
         p.caveReturn = (p.position + CAVE_SKIP).coerceAtMost(Board.goal(false))
         showPhotoDialog(
-            p, R.drawable.bg_cave,
+            p, caveBgRes,
             "ほらあなを みつけた！\nくらい どうくつへ はいってみよう。\n\nぬけると ${p.caveReturn}マスめに でられるよ（ぜん${Board.CAVE_COUNT}マス）"
         ) {
             p.inCave = true
             p.position = 0
             boardView.world = true
-            boardView.invalidate()
+            boardView.snapToCell(0)
             nextTurn()
         }
     }
 
     private fun exitCave(p: Player) {
         showPhotoDialog(
-            p, R.drawable.bg_cave,
+            p, caveBgRes,
             "どうくつを ぬけた！\nあかるい ばしょに でたよ。\n\n${p.caveReturn}マスめから さいかいだ！"
         ) {
             p.inCave = false
             p.position = p.caveReturn
             boardView.world = false
-            boardView.invalidate()
+            boardView.snapToCell(p.position)
             onLanded(p, fromEvent = false)   // 復帰先のマスは通常どおり発動する
         }
     }
@@ -1005,7 +957,8 @@ class MainActivity : Activity() {
 
     // ================= 盤面 =================
     object Board {
-        const val MAIN_COUNT = 30
+        /** 本線のマス数。stages.json の mainCellCount で上書きされる */
+        var MAIN_COUNT = 30
         /** 洞窟のマス数。cave.json の cellCount で上書きされる */
         var CAVE_COUNT = 20
 
@@ -1023,7 +976,8 @@ class MainActivity : Activity() {
     class BoardView(
         context: Context,
         private val players: List<Player>,
-        mainBgRes: Int
+        mainBgRes: Int,
+        caveBgRes: Int
     ) : View(context) {
         var turnIndex = 0
         var panEnabled = false
@@ -1049,7 +1003,7 @@ class MainActivity : Activity() {
         private val childBitmaps: Map<Int, Bitmap> = players.map { it.chara.childRes }.distinct()
             .associateWith { BitmapFactory.decodeResource(resources, it) }
         private val mainBg: Bitmap = BitmapFactory.decodeResource(resources, mainBgRes)
-        private val cave: Bitmap = BitmapFactory.decodeResource(resources, R.drawable.bg_cave)
+        private val cave: Bitmap = BitmapFactory.decodeResource(resources, caveBgRes)
         // マスの目印
         private val markCave: Bitmap = BitmapFactory.decodeResource(resources, R.drawable.mark_cave)
         private val markChapel: Bitmap = BitmapFactory.decodeResource(resources, R.drawable.mark_chapel)
@@ -1118,6 +1072,13 @@ class MainActivity : Activity() {
         }
 
         private fun worldX(i: Int) = spacing * i
+
+        /** アニメーションなしで即座にカメラを合わせる（世界の切り替え時に使う） */
+        fun snapToCell(i: Int) {
+            camAnim?.cancel()
+            camX = worldX(i)
+            invalidate()
+        }
 
         fun focusCell(i: Int, slow: Boolean) {
             val target = worldX(i)

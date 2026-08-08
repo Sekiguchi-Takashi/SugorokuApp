@@ -34,6 +34,23 @@ object GameData {
         val returnSkip: Int = 20
     )
 
+    /** JSONから読み込んだ本線1ステージ分 */
+    data class StageData(
+        val name: String,
+        val bgRes: Int,
+        val branchCell: Int,
+        val events: Map<Int, MainActivity.GameEvent>
+    )
+
+    /** 本線ステージ群の読み込み結果 */
+    data class StagesResult(
+        val stages: List<StageData>,
+        val mainCellCount: Int,
+        val warnings: List<String>
+    ) {
+        val ok: Boolean get() = warnings.isEmpty()
+    }
+
     /** 読み込み結果。エラーがあっても data は必ず返る（イベント0件になることはある） */
     data class LoadResult(
         val data: BoardData,
@@ -94,6 +111,136 @@ object GameData {
     }
 
     /**
+     * 1件のイベントJSONを GameEvent にする。
+     * shared（結婚/出産の共通定義）があれば、未指定の項目をそこから継承する。
+     */
+    private fun parseEvent(
+        context: Context,
+        o: JSONObject,
+        shared: JSONObject?
+    ): MainActivity.GameEvent {
+        val kind = parseKind(o.optString("kind", "normal"))
+        // 共通定義（wedding / birth）を土台にして、個別指定があれば上書きする
+        val base: JSONObject? = when (kind) {
+            MainActivity.EventKind.WEDDING -> shared?.optJSONObject("wedding")
+            MainActivity.EventKind.BIRTH -> shared?.optJSONObject("birth")
+            else -> null
+        }
+        fun str(key: String, def: String): String =
+            if (o.has(key)) o.optString(key, def) else base?.optString(key, def) ?: def
+        fun num(key: String, def: Int): Int =
+            if (o.has(key)) o.optInt(key, def) else base?.optInt(key, def) ?: def
+
+        return MainActivity.GameEvent(
+            bgRes = drawableId(context, str("bg", FALLBACK_BG)),
+            message = str("message", ""),
+            dManpuku = num("manpuku", 0),
+            dJuujitsu = num("juujitsu", 0),
+            dYuujou = num("yuujou", 0),
+            groupSize = num("group", 1).coerceIn(1, 4),
+            kind = kind,
+            dMove = num("move", 0)
+        )
+    }
+
+    /**
+     * イベント配列を読む。範囲外・重複は警告を積んでスキップする。
+     * @param label 警告メッセージに出す識別子
+     */
+    private fun parseEvents(
+        context: Context,
+        arr: org.json.JSONArray?,
+        cellCount: Int,
+        shared: JSONObject?,
+        label: String,
+        warnings: MutableList<String>
+    ): Map<Int, MainActivity.GameEvent> {
+        val events = LinkedHashMap<Int, MainActivity.GameEvent>()
+        if (arr == null) {
+            warnings.add("$label: events 配列がありません")
+            return events
+        }
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i)
+            if (o == null) {
+                warnings.add("$label: events[$i] がオブジェクトではありません")
+                continue
+            }
+            val cell = o.optInt("cell", -1)
+            if (cell < 1 || cell > cellCount - 2) {
+                warnings.add("$label: cell=$cell が範囲外(1〜${cellCount - 2})")
+                continue
+            }
+            if (events.containsKey(cell)) warnings.add("$label: cell=$cell が重複（後勝ち）")
+            val ev = parseEvent(context, o, shared)
+            if (ev.message.isBlank()) warnings.add("$label: cell=$cell のmessageが空です")
+            events[cell] = ev
+        }
+        return events
+    }
+
+    /**
+     * 本線ステージ群（stages.json）を読み込む。
+     * 1ステージも読めなければ stages が空のまま返るので、呼び出し側でフォールバックすること。
+     */
+    fun loadStages(context: Context): StagesResult {
+        val warnings = ArrayList<String>()
+        val raw = readJson(context, "stages.json")
+            ?: return StagesResult(emptyList(), MainActivity.Board.MAIN_COUNT,
+                arrayListOf("stages.json を読み込めませんでした"))
+
+        val root = try {
+            JSONObject(raw)
+        } catch (e: Exception) {
+            return StagesResult(emptyList(), MainActivity.Board.MAIN_COUNT,
+                arrayListOf("stages.json のJSON構文が不正です: ${e.message}"))
+        }
+
+        if (root.optInt("schemaVersion", 0) != 1) {
+            warnings.add("stages.json: 未対応のschemaVersion")
+        }
+        val cellCount = root.optInt("mainCellCount", MainActivity.Board.MAIN_COUNT).let {
+            if (it < 5) {
+                warnings.add("mainCellCountが小さすぎます($it)")
+                MainActivity.Board.MAIN_COUNT
+            } else it
+        }
+        val shared = root.optJSONObject("shared")
+        if (shared == null) warnings.add("stages.json: shared がありません（結婚/出産が空になります）")
+
+        val list = ArrayList<StageData>()
+        val arr = root.optJSONArray("stages")
+        if (arr == null) {
+            warnings.add("stages.json: stages 配列がありません")
+        } else {
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                val name = o.optString("name", "ステージ${i + 1}")
+                val branch = o.optInt("branchCell", -1)
+                if (branch !in 1..(cellCount - 2)) {
+                    warnings.add("$name: branchCell=$branch が範囲外")
+                }
+                val events = parseEvents(
+                    context, o.optJSONArray("events"), cellCount, shared, name, warnings
+                )
+                if (branch in events.keys) {
+                    warnings.add("$name: branchCell がイベントマスと重複しています")
+                }
+                list.add(
+                    StageData(
+                        name = name,
+                        bgRes = drawableId(context, o.optString("bg", FALLBACK_BG)),
+                        branchCell = branch,
+                        events = events
+                    )
+                )
+            }
+        }
+        if (list.isEmpty()) warnings.add("stages.json: 有効なステージが1つもありません")
+        return StagesResult(list, cellCount, warnings)
+    }
+
+    /**
      * 1つの盤面JSONを読み込む。
      * 壊れた項目は警告を積んでスキップし、読める分だけ返す。
      */
@@ -136,41 +283,9 @@ object GameData {
         val boardBg = drawableId(context, root.optString("bg", FALLBACK_BG))
         val returnSkip = root.optInt("returnSkip", 20).coerceIn(1, MainActivity.Board.MAIN_COUNT - 1)
 
-        val events = LinkedHashMap<Int, MainActivity.GameEvent>()
-        val arr = root.optJSONArray("events")
-        if (arr == null) {
-            warnings.add("events 配列がありません")
-        } else {
-            for (i in 0 until arr.length()) {
-                val o = arr.optJSONObject(i)
-                if (o == null) {
-                    warnings.add("events[$i] がオブジェクトではありません")
-                    continue
-                }
-                val cell = o.optInt("cell", -1)
-                // S(0) と G(cellCount-1) にはイベントを置けない
-                if (cell < 1 || cell > cellCount - 2) {
-                    warnings.add("events[$i] cell=$cell が範囲外(1〜${cellCount - 2})")
-                    continue
-                }
-                if (events.containsKey(cell)) {
-                    warnings.add("cell=$cell が重複しています（後勝ち）")
-                }
-                val msg = o.optString("message", "")
-                if (msg.isBlank()) warnings.add("cell=$cell のmessageが空です")
-
-                events[cell] = MainActivity.GameEvent(
-                    bgRes = drawableId(context, o.optString("bg", FALLBACK_BG)),
-                    message = msg,
-                    dManpuku = o.optInt("manpuku", 0),
-                    dJuujitsu = o.optInt("juujitsu", 0),
-                    dYuujou = o.optInt("yuujou", 0),
-                    groupSize = o.optInt("group", 1).coerceIn(1, 4),
-                    kind = parseKind(o.optString("kind", "normal")),
-                    dMove = o.optInt("move", 0)
-                )
-            }
-        }
+        val events = parseEvents(
+            context, root.optJSONArray("events"), cellCount, null, name, warnings
+        )
 
         return LoadResult(BoardData(name, cellCount, boardBg, events, returnSkip), warnings)
     }
