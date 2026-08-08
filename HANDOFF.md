@@ -3,7 +3,7 @@
 ## 概要
 どうぶつの森風の世界観のすごろくアプリ。プレイヤーはキャラ（しばいぬ・うさぎ・いのしし・トラ）を選び、ルーレット(1〜6)で30マスの盤面を進んでゴールを目指す。
 
-- 現在バージョン: **v3.3.1（v3.3 のビルドエラー修正版）**
+- 現在バージョン: **v4.0a（JSON読み込み基盤・洞窟のみ移設）**
 - パッケージ: `com.appathy.sugoroku` / minSdk 26 / targetSdk 34
 
 ## ロードマップ
@@ -12,6 +12,7 @@
 | 1 | ルーレット＋すごろく移動＋ゴール判定 | ✅ v1.0 |
 | 2 | 停止マスでイベント発生 | ほぼ完了（v2.2: 写真付きイベント10種＋すすむ/もどる7マス。残り: 1回休み・選択イベント・ゴール時スコア） |
 | 3 | マルチプレイ | ✅ 完了（最大4キャラ／人間は最大2人のパス&プレイ＋CPU） |
+| 4 | データ駆動化 | 進行中（v4.0a: 洞窟をJSON化。v4.0bで本線3ステージを移設） |
 
 ## ビルド規約（変更禁止）
 - AGP **8.5.2** / Kotlin **1.9.24** / Gradle **8.9**（CIの setup-gradle で固定、wrapperなし）
@@ -51,6 +52,40 @@ SugorokuApp/
 - `BoardView`: Canvas描画（マス円・経路線・駒ビットマップ）。`position` 更新→`invalidate()`
 - `RouletteView`: 6色セグメント。結果を先に抽選し、その角度に減速停止（DecelerateInterpolator 2.6秒）。`locked` はタップのみ禁止（`autoSpin()` は通る）
 - 移動: `movePiece()` が Handler 300ms間隔で1マスずつ進める。ゴール超過は現状「ゴールで停止（clamp）」仕様。誰かがゴールした時点で勝敗確定
+
+## v4.0a の主要変更（データ駆動化・前半）
+
+**設計書（人生ゲームアプリ_スマホ版設計書.md）に沿った v4系ロードマップ**
+1. **v4.0 データ駆動化** ← イマココ（a=洞窟 / b=本線3ステージ）
+2. v4.1 イベントエディタ＋図鑑
+3. v4.2 職業・資産
+
+### 新規ファイル `GameData.kt`
+JSON読み込み基盤。**外部依存ゼロを維持するため Android標準の `org.json` のみ使用**。
+- `loadBoard(context, fileName, defaultName, defaultCellCount): LoadResult`
+- `LoadResult(data: BoardData, warnings: List<String>)` — **例外を投げず、壊れた項目はスキップして警告を積む**。データが壊れてもアプリは起動する
+- 読み込み優先順: **`filesDir/{file}.json` → `assets/{file}.json`**（v4.1のエディタが filesDir に書き出す前提）
+- 画像は文字列名で持ち `resources.getIdentifier()` で解決。見つからなければ `bg_forest` にフォールバック。結果は `resCache` に保持
+- 警告がある場合は Toast で先頭3件を表示（開発中に気づけるように）
+
+### `assets/cave.json`（schemaVersion 1）
+```json
+{ "schemaVersion": 1, "name": "どうくつ", "cellCount": 20,
+  "returnSkip": 20, "bg": "bg_cave",
+  "events": [ { "cell": 3, "bg": "bg_cave", "kind": "normal",
+                "message": "…", "manpuku": 0, "juujitsu": 15,
+                "yuujou": 0, "group": 1, "move": 0 } ] }
+```
+- `kind`: `normal` / `wedding` / `birth`（未知の値は normal 扱い）
+- `cell` は 1〜cellCount-2（S と G には置けない）
+- `Board.CAVE_COUNT` は **const から var に変更**し、JSONの `cellCount` で上書きされる
+- `CAVE_SKIP` も JSONの `returnSkip` で駆動
+
+### 変更していないこと（意図的）
+**リグレッションゼロが v4.0a の成功条件**。本線3ステージは Kotlin 定義のまま、ゲーム内容・バランス・UIは一切変更していない。JSON化の不具合と新機能の不具合を切り分けられるようにするため。
+
+### 検証スクリプト（納品前に実行）
+構文（括弧対応）/ 文字列テンプレート結合の危険箇所ゼロ / JSON: schemaVersion・マス重複・範囲・画像実在・kind既知・移動なしが半数以上・returnSkip妥当 / drawable参照の実在
 
 ## v3.3の主要変更
 

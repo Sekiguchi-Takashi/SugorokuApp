@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "name": "どうくつ",
+  "cellCount": 20,
+  "returnSkip": 20,
+  "bg": "bg_cave",
+  "events": [
+    { "cell": 3,  "bg": "bg_cave", "kind": "normal",
+      "message": "ひかる石を みつけた！\n充実15",
+      "manpuku": 0, "juujitsu": 15, "yuujou": 0, "group": 1, "move": 0 },
+
+    { "cell": 5,  "bg": "bg_cave", "kind": "normal",
+      "message": "みちに まよってしまった…。\n3マス もどる",
+      "manpuku": 0, "juujitsu": 0, "yuujou": 0, "group": 1, "move": -3 },
+
+    { "cell": 7,  "bg": "bg_cave", "kind": "normal",
+      "message": "こうもりに おどろいた…。\n充実-10　2マス もどる",
+      "manpuku": 0, "juujitsu": -10, "yuujou": 0, "group": 1, "move": -2 },
+
+    { "cell": 9,  "bg": "bg_cave", "kind": "normal",
+      "message": "ちかどうを みつけた！\n2マス すすむ",
+      "manpuku": 0, "juujitsu": 0, "yuujou": 0, "group": 1, "move": 2 },
+
+    { "cell": 11, "bg": "bg_cave", "kind": "normal",
+      "message": "きれいな ちかすいを のんだ。\n満腹10　充実5",
+      "manpuku": 10, "juujitsu": 5, "yuujou": 0, "group": 1, "move": 0 },
+
+    { "cell": 13, "bg": "bg_cave", "kind": "normal",
+      "message": "ちかの ひろばに でた。\n充実10",
+      "manpuku": 0, "juujitsu": 10, "yuujou": 0, "group": 1, "move": 0 },
+
+    { "cell": 15, "bg": "bg_cave", "kind": "normal",
+      "message": "たからばこを みつけた！\n満腹15　充実15　友情15",
+      "manpuku": 15, "juujitsu": 15, "yuujou": 15, "group": 1, "move": 0 },
+
+    { "cell": 17, "bg": "bg_cave", "kind": "normal",
+      "message": "あしもとが すべった…。\n3マス もどる",
+      "manpuku": 0, "juujitsu": 0, "yuujou": 0, "group": 1, "move": -3 }
+  ]
+}

@@ -119,20 +119,29 @@ class MainActivity : Activity() {
     }
 
     /** 洞窟ルート（全ステージ共通・20マス）。抜けると分岐マスの20マス先に復帰する */
-    private val caveEvents by lazy {
-        mapOf(
-            3 to GameEvent(R.drawable.bg_cave, "ひかる石を みつけた！\n充実15", 0, 15, 0, 1),
-            5 to GameEvent(R.drawable.bg_cave, "みちに まよってしまった…。\n3マス もどる", 0, 0, 0, 1, dMove = -3),
-            7 to GameEvent(R.drawable.bg_cave, "こうもりに おどろいた…。\n充実-10　2マス もどる", 0, -10, 0, 1, dMove = -2),
-            9 to GameEvent(R.drawable.bg_cave, "ちかどうを みつけた！\n2マス すすむ", 0, 0, 0, 1, dMove = 2),
-            11 to GameEvent(R.drawable.bg_cave, "きれいな ちかすいを のんだ。\n満腹10　充実5", 10, 5, 0, 1),
-            13 to GameEvent(R.drawable.bg_cave, "ちかの ひろばに でた。\n充実10", 0, 10, 0, 1),
-            15 to GameEvent(R.drawable.bg_cave, "たからばこを みつけた！\n満腹15　充実15　友情15", 15, 15, 15, 1),
-            17 to GameEvent(R.drawable.bg_cave, "あしもとが すべった…。\n3マス もどる", 0, 0, 0, 1, dMove = -3)
-        )
+    /** 洞窟データ（assets/cave.json から読み込み。失敗時は空で安全に動く） */
+    private var caveEvents: Map<Int, GameEvent> = emptyMap()
+    private var caveCellCount: Int = Board.CAVE_COUNT
+
+    /** JSONデータを読み込む。onCreate で1回だけ呼ぶ */
+    private fun loadGameData() {
+        val res = GameData.loadCave(this)
+        caveEvents = res.data.events
+        caveCellCount = res.data.cellCount
+        CAVE_SKIP = res.data.returnSkip
+        Board.CAVE_COUNT = caveCellCount
+        if (!res.ok) {
+            // データ不備は開発中に気づけるよう画面にも出す（ゲームは続行できる）
+            Toast.makeText(
+                this,
+                "どうくつデータの警告:\n" + res.warnings.take(3).joinToString("\n"),
+                Toast.LENGTH_LONG
+            ).show()
+        }
     }
 
-    private val CAVE_SKIP = 20   // 分岐マスから何マス先に復帰するか
+    /** 分岐マスから何マス先の本線に復帰するか（cave.json の returnSkip） */
+    private var CAVE_SKIP = 20
 
     // ================= ステージ定義 =================
     private val stages: List<Stage> by lazy {
@@ -232,6 +241,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        loadGameData()
         showTitle()
     }
 
@@ -996,7 +1006,8 @@ class MainActivity : Activity() {
     // ================= 盤面 =================
     object Board {
         const val MAIN_COUNT = 30
-        const val CAVE_COUNT = 20
+        /** 洞窟のマス数。cave.json の cellCount で上書きされる */
+        var CAVE_COUNT = 20
 
         var normalEventCells: Set<Int> = emptySet()
         var weddingCells: Set<Int> = emptySet()
