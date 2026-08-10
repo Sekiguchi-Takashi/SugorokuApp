@@ -90,6 +90,25 @@ class MainActivity : Activity() {
         const val CHILD_SCORE = 50           // こどものスコア
     }
 
+    /**
+     * 盤面のズーム。画面に何マス見えるかで表す。
+     * BoardView はステージ切替のたびに作り直されるので、設定はここに保持する。
+     */
+    object Zoom {
+        val steps = floatArrayOf(3f, 5f, 8f)
+        var index = 0
+        val cells: Float get() = steps[index]
+        val label: String get() = "${steps[index].toInt()}マス"
+        val isMax: Boolean get() = index == steps.size - 1
+        fun next() { index = (index + 1) % steps.size }
+        /** 縮小するほどマスが潰れるので、比率を少し大きめに補正する */
+        val cellRatio: Float get() = when (index) {
+            0 -> 0.27f
+            1 -> 0.30f
+            else -> 0.33f
+        }
+    }
+
     object Speed {
         var fast = false
         val spinMs get() = if (fast) 1100L else 2600L
@@ -197,6 +216,7 @@ class MainActivity : Activity() {
     private lateinit var rouletteView: RouletteView
     private lateinit var statusText: TextView
     private lateinit var speedButton: Button
+    private lateinit var zoomButton: Button
     private lateinit var startButton: Button
     private lateinit var statsBar: TextView
     private lateinit var manpukuSkillButton: Button
@@ -687,19 +707,42 @@ class MainActivity : Activity() {
             textSize = 11f
             setTextColor(Color.parseColor("#558B2F"))
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        speedButton = Button(this).apply {
-            textSize = 13f
+        val btnCol = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.END
+        }
+        zoomButton = Button(this).apply {
+            textSize = 12f
             minHeight = 0
             minimumHeight = 0
-            setPadding(dp(12), dp(6), dp(12), dp(6))
+            setTextColor(Color.WHITE)
+            background = roundedBg(Color.parseColor("#5E35B1"))
+            setPadding(dp(10), dp(5), dp(10), dp(5))
+            setOnClickListener {
+                // 表示中のプレイヤーを中心に保ったまま倍率だけ変える
+                boardView.cycleZoom(players.getOrNull(turn)?.position ?: 0)
+                updateZoomLabel()
+            }
+        }
+        btnCol.addView(zoomButton)
+        speedButton = Button(this).apply {
+            textSize = 12f
+            minHeight = 0
+            minimumHeight = 0
+            setPadding(dp(10), dp(5), dp(10), dp(5))
             setOnClickListener {
                 Speed.fast = !Speed.fast
                 updateSpeedLabel()
             }
         }
+        btnCol.addView(speedButton, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(4) })
         updateSpeedLabel()
-        infoRow.addView(speedButton)
+        infoRow.addView(btnCol)
         root.addView(infoRow)
+        updateZoomLabel()
 
         statusText = TextView(this).apply {
             textSize = 17f
@@ -803,6 +846,12 @@ class MainActivity : Activity() {
 
     private fun updateSpeedLabel() {
         speedButton.text = if (Speed.fast) "はやさ: はやい⚡" else "はやさ: ふつう"
+    }
+
+    /** ズームボタンには「今どれだけ見えているか」を出す */
+    private fun updateZoomLabel() {
+        if (!::zoomButton.isInitialized) return
+        zoomButton.text = "🔍 ${Zoom.label}ぶん" + if (Zoom.isMax) "（さいだい）" else ""
     }
 
     private fun updateStatsBar() {
@@ -1557,6 +1606,15 @@ class MainActivity : Activity() {
         private val markChapel: Bitmap = BitmapFactory.decodeResource(resources, R.drawable.mark_chapel)
         private val markHeart: Bitmap = BitmapFactory.decodeResource(resources, R.drawable.mark_heart)
 
+        /** 次の段階へ切り替える。見ている位置は保ったまま倍率だけ変える */
+        fun cycleZoom(focusCell: Int) {
+            Zoom.next()
+            applyMetrics()
+            camAnim?.cancel()
+            camX = worldX(focusCell)
+            invalidate()
+        }
+
         private var camX = 0f
         private var camAnim: ValueAnimator? = null
         private var spacing = 0f
@@ -1660,13 +1718,21 @@ class MainActivity : Activity() {
             return true
         }
 
+        /** ズーム段階と表示サイズからマスの寸法を決める */
+        private fun applyMetrics() {
+            if (width == 0) return
+            spacing = width / Zoom.cells
+            cellR = spacing * Zoom.cellRatio
+            laneY = height * 0.72f
+            // 縮小してもマスの記号が読めるよう、文字サイズに下限を設ける
+            val minText = 11f * resources.displayMetrics.density
+            textPaint.textSize = maxOf(cellR * 0.62f, minText)
+            eventTextPaint.textSize = maxOf(cellR * 0.62f, minText)
+            branchTextPaint.textSize = maxOf(cellR * 0.46f, minText * 0.8f)
+        }
+
         override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
-            spacing = w / 3f
-            cellR = spacing * 0.27f
-            laneY = h * 0.72f
-            textPaint.textSize = cellR * 0.62f
-            eventTextPaint.textSize = cellR * 0.62f
-            branchTextPaint.textSize = cellR * 0.46f
+            applyMetrics()
             camX = worldX(players.getOrNull(turnIndex)?.position ?: 0)
         }
 
