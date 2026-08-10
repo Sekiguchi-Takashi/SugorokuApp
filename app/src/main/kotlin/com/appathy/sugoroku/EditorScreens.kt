@@ -296,12 +296,17 @@ class EditorScreens(
                     "shop" -> "🛒 おみせ"
                     else -> o.optString("message", "").replace("\n", " ").take(24)
                 }
-                val color = when (kind) {
-                    "wedding" -> Color.parseColor("#AD1457")
-                    "birth" -> Color.parseColor("#EF6C00")
-                    "job" -> Color.parseColor("#00897B")
-                    "shop" -> Color.parseColor("#D84315")
-                    else -> Color.parseColor("#7CB342")
+                // 盤面と同じ配色にそろえる（緑=good 紫=bad ピンク=けっこん出産）
+                val bad = kind == "normal" && (
+                    o.optInt("manpuku") + o.optInt("juujitsu") + o.optInt("yuujou") < 0 ||
+                        o.optInt("move") < 0
+                    )
+                val color = when {
+                    kind == "wedding" || kind == "birth" -> Color.parseColor("#EC407A")
+                    kind == "job" -> Color.parseColor("#00ACC1")
+                    kind == "shop" -> Color.parseColor("#F9A825")
+                    bad -> Color.parseColor("#7E57C2")
+                    else -> Color.parseColor("#43A047")
                 }
                 addView(
                     listButton("${cell}マスめ", mark, color) {

@@ -73,6 +73,18 @@ def check_stages(files):
         job = [e['cell'] for e in evs if e.get('kind') == 'job']
         shop = [e['cell'] for e in evs if e.get('kind') == 'shop']
         nrm = [e for e in evs if e.get('kind', 'normal') == 'normal']
+        def is_bad(e):
+            return (e.get('manpuku', 0) + e.get('juujitsu', 0) + e.get('yuujou', 0) < 0
+                    or e.get('move', 0) < 0)
+        bad_ev = [e for e in nrm if is_bad(e)]
+        good_ev = [e for e in nrm if not is_bad(e)]
+        net = sum(e.get('manpuku', 0) + e.get('juujitsu', 0) + e.get('yuujou', 0) for e in nrm)
+        if not bad_ev:
+            warn('わるいイベントがありません（起伏が出ません）')
+        if len(bad_ev) > len(good_ev):
+            warn('わるいイベント(%d)がいいイベント(%d)より多い' % (len(bad_ev), len(good_ev)))
+        if net <= 0:
+            err('通常イベントの合計が %+d。ステータスが伸びずゲームが成立しません' % net)
         known = {'normal', 'wedding', 'birth', 'job', 'shop'}
         bad_kind = [e.get('kind') for e in evs if e.get('kind', 'normal') not in known]
         if bad_kind:
@@ -111,9 +123,9 @@ def check_stages(files):
                 err('cell %d の group は 1〜4' % e['cell'])
         if st.get('bg') not in files:
             err('盤面背景 %s がありません' % st.get('bg'))
-        ok('イベント%d件 (通常%d 💒%d 👶%d 💼%d 🛒%d) 移動あり%d/なし%d あな%d'
-           % (len(evs), len(nrm), len(wed), len(bir), len(job), len(shop),
-              len(mv), len(nrm) - len(mv), b))
+        ok('イベント%d件 (🟢%d 🟣%d 💒%d 👶%d 💼%d 🛒%d) 移動あり%d 合計%+d あな%d'
+           % (len(evs), len(good_ev), len(bad_ev), len(wed), len(bir), len(job), len(shop),
+              len(mv), net, b))
     return d
 
 

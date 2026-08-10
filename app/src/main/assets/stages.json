@@ -46,6 +46,17 @@
       "branchCell": 5,
       "events": [
         {
+          "cell": 1,
+          "bg": "bg_darkforest",
+          "kind": "normal",
+          "message": "よるの もりで みちに まよった…。\n充実-8",
+          "manpuku": 0,
+          "juujitsu": -8,
+          "yuujou": 0,
+          "group": 1,
+          "move": 0
+        },
+        {
           "cell": 2,
           "bg": "bg_famiresu",
           "kind": "normal",
@@ -198,6 +209,28 @@
           "kind": "wedding"
         },
         {
+          "cell": 20,
+          "bg": "bg_fogroad",
+          "kind": "normal",
+          "message": "きりで どっちか わからない…。\n2マス もどる",
+          "manpuku": 0,
+          "juujitsu": 0,
+          "yuujou": 0,
+          "group": 1,
+          "move": -2
+        },
+        {
+          "cell": 21,
+          "bg": "bg_darkroom",
+          "kind": "normal",
+          "message": "こわくて ねむれなかった…。\n満腹-10　充実-5",
+          "manpuku": -10,
+          "juujitsu": -5,
+          "yuujou": 0,
+          "group": 1,
+          "move": 0
+        },
+        {
           "cell": 22,
           "bg": "bg_cinema",
           "kind": "normal",
@@ -213,6 +246,17 @@
           "kind": "birth"
         },
         {
+          "cell": 24,
+          "bg": "bg_darkdining",
+          "kind": "normal",
+          "message": "ごはんが つめたかった…。\n満腹-12",
+          "manpuku": -12,
+          "juujitsu": 0,
+          "yuujou": 0,
+          "group": 2,
+          "move": 0
+        },
+        {
           "cell": 25,
           "kind": "shop"
         },
@@ -226,6 +270,28 @@
           "yuujou": 10,
           "group": 4,
           "move": 3
+        },
+        {
+          "cell": 27,
+          "bg": "bg_darkcabin",
+          "kind": "normal",
+          "message": "あやしい かばんを ひろった…。\n充実-10　3マス もどる",
+          "manpuku": 0,
+          "juujitsu": -10,
+          "yuujou": 0,
+          "group": 1,
+          "move": -3
+        },
+        {
+          "cell": 28,
+          "bg": "bg_nightalley",
+          "kind": "normal",
+          "message": "よみちで まよった…。\n友情-8",
+          "manpuku": 0,
+          "juujitsu": 0,
+          "yuujou": -8,
+          "group": 1,
+          "move": 0
         }
       ]
     },
@@ -234,6 +300,17 @@
       "bg": "bg_city",
       "branchCell": 7,
       "events": [
+        {
+          "cell": 1,
+          "bg": "bg_nightstation",
+          "kind": "normal",
+          "message": "さいしゅう でんしゃに のりおくれた…。\n充実-10",
+          "manpuku": 0,
+          "juujitsu": -10,
+          "yuujou": 0,
+          "group": 1,
+          "move": 0
+        },
         {
           "cell": 2,
           "bg": "bg_bus",
@@ -266,6 +343,17 @@
           "yuujou": 5,
           "group": 3,
           "move": 0
+        },
+        {
+          "cell": 5,
+          "bg": "bg_nighttrain",
+          "kind": "normal",
+          "message": "でんしゃで ねすごした…。\n3マス もどる",
+          "manpuku": 0,
+          "juujitsu": 0,
+          "yuujou": 0,
+          "group": 1,
+          "move": -3
         },
         {
           "cell": 6,
@@ -324,6 +412,17 @@
           "kind": "birth"
         },
         {
+          "cell": 14,
+          "bg": "bg_choba",
+          "kind": "normal",
+          "message": "よやくが とれていなかった…。\n満腹-10　友情-5",
+          "manpuku": -10,
+          "juujitsu": 0,
+          "yuujou": -5,
+          "group": 1,
+          "move": 0
+        },
+        {
           "cell": 15,
           "bg": "bg_onsen",
           "kind": "normal",
@@ -376,6 +475,17 @@
           "kind": "wedding"
         },
         {
+          "cell": 21,
+          "bg": "bg_koban",
+          "kind": "normal",
+          "message": "こうばんで じじょうちょうしゅ…。\n充実-12",
+          "manpuku": 0,
+          "juujitsu": -12,
+          "yuujou": 0,
+          "group": 1,
+          "move": 0
+        },
+        {
           "cell": 22,
           "bg": "bg_mountain",
           "kind": "normal",
@@ -385,6 +495,17 @@
           "yuujou": 15,
           "group": 4,
           "move": -3
+        },
+        {
+          "cell": 23,
+          "bg": "bg_datsuijo",
+          "kind": "normal",
+          "message": "おふろで のぼせた…。\n満腹-8　充実-5",
+          "manpuku": -8,
+          "juujitsu": -5,
+          "yuujou": 0,
+          "group": 2,
+          "move": 0
         },
         {
           "cell": 24,
@@ -404,6 +525,28 @@
           "yuujou": 15,
           "group": 4,
           "move": 2
+        },
+        {
+          "cell": 27,
+          "bg": "bg_lecture",
+          "kind": "normal",
+          "message": "テストが むずかしかった…。\n充実-15",
+          "manpuku": 0,
+          "juujitsu": -15,
+          "yuujou": 0,
+          "group": 1,
+          "move": 0
+        },
+        {
+          "cell": 28,
+          "bg": "bg_washitsu",
+          "kind": "normal",
+          "message": "ひとりぼっちの よる…。\n友情-10",
+          "manpuku": 0,
+          "juujitsu": 0,
+          "yuujou": -10,
+          "group": 1,
+          "move": 0
         }
       ]
     },
@@ -422,6 +565,17 @@
           "yuujou": 0,
           "group": 2,
           "move": 0
+        },
+        {
+          "cell": 3,
+          "bg": "bg_kanrishitsu",
+          "kind": "normal",
+          "message": "かぎを なくして しまった…。\n充実-10　2マス もどる",
+          "manpuku": 0,
+          "juujitsu": -10,
+          "yuujou": 0,
+          "group": 1,
+          "move": -2
         },
         {
           "cell": 4,
@@ -487,6 +641,17 @@
           "move": -3
         },
         {
+          "cell": 11,
+          "bg": "bg_darkforest",
+          "kind": "normal",
+          "message": "もりで はぐれて しまった…。\n友情-12",
+          "manpuku": 0,
+          "juujitsu": 0,
+          "yuujou": -12,
+          "group": 3,
+          "move": 0
+        },
+        {
           "cell": 12,
           "kind": "birth"
         },
@@ -526,6 +691,17 @@
           "yuujou": 0,
           "group": 1,
           "move": -3
+        },
+        {
+          "cell": 17,
+          "bg": "bg_nightstation",
+          "kind": "normal",
+          "message": "でんしゃが こない…。\n充実-8　2マス もどる",
+          "manpuku": 0,
+          "juujitsu": -8,
+          "yuujou": 0,
+          "group": 1,
+          "move": -2
         },
         {
           "cell": 18,
@@ -569,6 +745,17 @@
           "move": 0
         },
         {
+          "cell": 23,
+          "bg": "bg_darkdining",
+          "kind": "normal",
+          "message": "ごはんを たべそこねた…。\n満腹-15",
+          "manpuku": -15,
+          "juujitsu": 0,
+          "yuujou": 0,
+          "group": 2,
+          "move": 0
+        },
+        {
           "cell": 24,
           "kind": "birth"
         },
@@ -584,12 +771,34 @@
           "move": 0
         },
         {
+          "cell": 26,
+          "bg": "bg_fogroad",
+          "kind": "normal",
+          "message": "きりが ふかくて すすめない…。\n4マス もどる",
+          "manpuku": 0,
+          "juujitsu": 0,
+          "yuujou": 0,
+          "group": 1,
+          "move": -4
+        },
+        {
           "cell": 27,
           "bg": "bg_park",
           "kind": "normal",
           "message": "こうえんで あそんだ。\n充実10",
           "manpuku": 0,
           "juujitsu": 10,
+          "yuujou": 0,
+          "group": 1,
+          "move": 0
+        },
+        {
+          "cell": 28,
+          "bg": "bg_nightalley",
+          "kind": "normal",
+          "message": "くらい みちで ころんだ…。\n満腹-8　充実-8",
+          "manpuku": -8,
+          "juujitsu": -8,
           "yuujou": 0,
           "group": 1,
           "move": 0

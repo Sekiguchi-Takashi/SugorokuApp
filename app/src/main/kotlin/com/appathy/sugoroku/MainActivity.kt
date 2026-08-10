@@ -146,6 +146,14 @@ class MainActivity : Activity() {
     private var jobsData: GameData.JobsData =
         GameData.JobsData(100, emptyList(), emptyList(), emptyList())
 
+    /**
+     * そのイベントが「損をする」ものか。
+     * ステータスの合計がマイナス、または もどる ならbadとして紫で示す。
+     */
+    private fun isBad(ev: GameEvent): Boolean =
+        ev.kind == EventKind.NORMAL &&
+            (ev.dManpuku + ev.dJuujitsu + ev.dYuujou < 0 || ev.dMove < 0)
+
     private fun jobOf(id: String): GameData.JobDef? = jobsData.jobs.firstOrNull { it.id == id }
     private fun skillOf(id: String): GameData.SkillDef? = jobsData.skills.firstOrNull { it.id == id }
 
@@ -251,6 +259,8 @@ class MainActivity : Activity() {
         Board.birthCells = stage.events.filterValues { it.kind == EventKind.BIRTH }.keys
         Board.jobCells = stage.events.filterValues { it.kind == EventKind.JOB }.keys
         Board.shopCells = stage.events.filterValues { it.kind == EventKind.SHOP }.keys
+        Board.badCells = stage.events.filterValues { isBad(it) }.keys
+        Board.caveBadCells = caveEvents.filterValues { isBad(it) }.keys
         Board.branchCell = stage.branchCell
         Board.caveEventCells = caveEvents.keys
     }
@@ -703,7 +713,9 @@ class MainActivity : Activity() {
             setPadding(dp(12), 0, dp(12), 0)
         }
         infoRow.addView(TextView(this).apply {
-            text = "ステージ${stageIndex + 1}/${stages.size}「${stage.name}」\n⭐イベント 💒けっこん 👶あかちゃん 💼しごと 🛒おみせ\n「あな」どうくつへ / すすむ・もどるは イベントの中で"
+            text = "ステージ${stageIndex + 1}/${stages.size}「${stage.name}」\n" +
+                "🟢いいこと 🟣わるいこと 🟠ワープ 🩷けっこん・出産\n" +
+                "🩵しごと 🟡おみせ"
             textSize = 11f
             setTextColor(Color.parseColor("#558B2F"))
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
@@ -1564,6 +1576,9 @@ class MainActivity : Activity() {
 
         var jobCells: Set<Int> = emptySet()
         var shopCells: Set<Int> = emptySet()
+        /** そのマスで損をするか（ステータスがへる、または もどる） */
+        var badCells: Set<Int> = emptySet()
+        var caveBadCells: Set<Int> = emptySet()
         var caveEventCells: Set<Int> = emptySet()
 
         fun count(cave: Boolean) = if (cave) CAVE_COUNT else MAIN_COUNT
@@ -1626,12 +1641,14 @@ class MainActivity : Activity() {
             color = Color.parseColor("#C9A66B"); strokeWidth = 26f; strokeCap = Paint.Cap.ROUND
         }
         private val cellPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FFF8E1") }
-        private val eventPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#CE93D8") }
-        private val weddingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#F8BBD0") }
-        private val babyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FFE082") }
-        private val jobPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#80CBC4") }
-        private val shopPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FFAB91") }
-        private val branchPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#7E57C2") }
+        // マスの色は種類がひと目で分かるよう用途ごとに固定する
+        //   緑=good / 紫=bad / オレンジ=ワープ / ピンク=けっこん・出産
+        private val goodPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#66BB6A") }
+        private val badPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#9575CD") }
+        private val warpPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FF9800") }
+        private val familyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#F48FB1") }
+        private val jobPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#4DD0E1") }
+        private val shopPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FFD54F") }
         private val branchTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE; textAlign = Paint.Align.CENTER; typeface = Typeface.DEFAULT_BOLD
         }
@@ -1773,14 +1790,19 @@ class MainActivity : Activity() {
         private fun cellFill(i: Int): Paint = when {
             i == 0 -> startPaint
             i == goalIndex -> goalPaint
-            world -> if (i in Board.caveEventCells) eventPaint else cellPaint
-            i == Board.branchCell -> branchPaint
+            world -> when {
+                i in Board.caveBadCells -> badPaint
+                i in Board.caveEventCells -> goodPaint
+                else -> cellPaint
+            }
+            i == Board.branchCell -> warpPaint            // ワープ = オレンジ
             lockedBirth(i) -> cellPaint
-            i in Board.birthCells -> babyPaint
-            i in Board.weddingCells -> weddingPaint
+            i in Board.birthCells -> familyPaint          // 出産 = ピンク
+            i in Board.weddingCells -> familyPaint        // けっこん = ピンク
             i in Board.jobCells -> jobPaint
             i in Board.shopCells -> shopPaint
-            i in Board.normalEventCells -> eventPaint
+            i in Board.badCells -> badPaint               // bad = むらさき
+            i in Board.normalEventCells -> goodPaint      // good = みどり
             else -> cellPaint
         }
 
@@ -1814,6 +1836,7 @@ class MainActivity : Activity() {
             for (i in first..last) {
                 val x = worldX(i)
                 val eventCells = if (world) Board.caveEventCells else Board.normalEventCells
+                val badCells = if (world) Board.caveBadCells else Board.badCells
                 canvas.drawCircle(x, laneY, cellR, cellFill(i))
                 canvas.drawCircle(x, laneY, cellR, cellEdge)
                 when {
@@ -1826,6 +1849,7 @@ class MainActivity : Activity() {
                     !world && i in Board.weddingCells -> canvas.drawText("💒", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
                     !world && i in Board.jobCells -> canvas.drawText("💼", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
                     !world && i in Board.shopCells -> canvas.drawText("🛒", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
+                    i in badCells -> canvas.drawText("💧", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
                     i in eventCells -> canvas.drawText("⭐", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
                     else -> canvas.drawText("$i", x, laneY + textPaint.textSize / 3, textPaint)
                 }
