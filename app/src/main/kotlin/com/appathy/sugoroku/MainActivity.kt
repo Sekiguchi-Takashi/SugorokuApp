@@ -104,7 +104,11 @@ class MainActivity : Activity() {
             Chara("しばいぬ", R.drawable.chara_shiba, R.drawable.chara_shiba_f, R.drawable.child_shiba),
             Chara("うさぎ", R.drawable.chara_usagi, R.drawable.chara_usagi_f, R.drawable.child_usagi),
             Chara("いのしし", R.drawable.chara_inoshishi, R.drawable.chara_inoshishi_f, R.drawable.child_inoshishi),
-            Chara("トラ", R.drawable.chara_tora, R.drawable.chara_tora_f, R.drawable.child_tora)
+            Chara("トラ", R.drawable.chara_tora, R.drawable.chara_tora_f, R.drawable.child_tora),
+            Chara("ペンギン", R.drawable.chara_penguin, R.drawable.chara_penguin_f, R.drawable.child_penguin),
+            Chara("ネズミ", R.drawable.chara_nezumi, R.drawable.chara_nezumi_f, R.drawable.child_nezumi),
+            Chara("ツル", R.drawable.chara_tsuru, R.drawable.chara_tsuru_f, R.drawable.child_tsuru),
+            Chara("カエル", R.drawable.chara_kaeru, R.drawable.chara_kaeru_f, R.drawable.child_kaeru)
         )
     }
 
@@ -330,11 +334,15 @@ class MainActivity : Activity() {
         root.addView(titleText(title))
         root.addView(subText(sub ?: "タップして えらんでね"))
 
-        val grid = GridLayout(this).apply { rowCount = 2; columnCount = 2 }
-        val cellSize = min(
-            resources.displayMetrics.widthPixels,
-            resources.displayMetrics.heightPixels
-        ) / 2 - dp(36)
+        // キャラが増えても崩れないよう、列数・行数を匹数から決める
+        val cols = if (options.size > 6) 3 else 2
+        val grid = GridLayout(this).apply {
+            columnCount = cols
+            rowCount = (options.size + cols - 1) / cols
+        }
+        // 列が増えるほどセルは小さくなるので、余白も控えめにする
+        val gap = if (cols == 3) dp(20) else dp(40)
+        val cellSize = resources.displayMetrics.widthPixels / cols - gap
         for (c in options) {
             val cell = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
