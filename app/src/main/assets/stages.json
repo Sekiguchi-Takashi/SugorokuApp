@@ -19,6 +19,24 @@
       "yuujou": 30,
       "group": 1,
       "move": 0
+    },
+    "job": {
+      "bg": "bg_town",
+      "message": "しごとを さがしに きた！\nなりたい しごとを えらぼう。",
+      "manpuku": 0,
+      "juujitsu": 0,
+      "yuujou": 0,
+      "group": 1,
+      "move": 0
+    },
+    "shop": {
+      "bg": "bg_mall",
+      "message": "おみせに よった。\nおかねで スキルを かえるよ。",
+      "manpuku": 0,
+      "juujitsu": 0,
+      "yuujou": 0,
+      "group": 1,
+      "move": 0
     }
   },
   "stages": [
@@ -98,6 +116,10 @@
           "move": 0
         },
         {
+          "cell": 10,
+          "kind": "job"
+        },
+        {
           "cell": 11,
           "bg": "bg_pool",
           "kind": "normal",
@@ -146,6 +168,10 @@
           "move": 0
         },
         {
+          "cell": 16,
+          "kind": "shop"
+        },
+        {
           "cell": 17,
           "bg": "bg_woodhouse",
           "kind": "normal",
@@ -185,6 +211,10 @@
         {
           "cell": 23,
           "kind": "birth"
+        },
+        {
+          "cell": 25,
+          "kind": "shop"
         },
         {
           "cell": 26,
@@ -275,6 +305,10 @@
           "move": 0
         },
         {
+          "cell": 11,
+          "kind": "job"
+        },
+        {
           "cell": 12,
           "bg": "bg_ship",
           "kind": "normal",
@@ -310,6 +344,10 @@
           "yuujou": 0,
           "group": 1,
           "move": -2
+        },
+        {
+          "cell": 17,
+          "kind": "shop"
         },
         {
           "cell": 18,
@@ -351,6 +389,10 @@
         {
           "cell": 24,
           "kind": "birth"
+        },
+        {
+          "cell": 25,
+          "kind": "shop"
         },
         {
           "cell": 26,
@@ -419,6 +461,10 @@
           "move": 0
         },
         {
+          "cell": 8,
+          "kind": "job"
+        },
+        {
           "cell": 9,
           "bg": "bg_cathedral",
           "kind": "normal",
@@ -456,6 +502,10 @@
           "move": 0
         },
         {
+          "cell": 14,
+          "kind": "shop"
+        },
+        {
           "cell": 15,
           "bg": "bg_rainschool",
           "kind": "normal",
@@ -491,6 +541,10 @@
           "yuujou": 8,
           "group": 2,
           "move": 0
+        },
+        {
+          "cell": 20,
+          "kind": "shop"
         },
         {
           "cell": 21,

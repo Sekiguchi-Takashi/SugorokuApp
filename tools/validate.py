@@ -54,7 +54,7 @@ def check_stages(files):
         err('schemaVersion が 1 ではありません')
     n = d.get('mainCellCount', 30)
     shared = d.get('shared', {})
-    for k in ('wedding', 'birth'):
+    for k in ('wedding', 'birth', 'job', 'shop'):
         if k not in shared:
             err('shared.%s がありません' % k)
         elif shared[k].get('bg') not in files:
@@ -70,7 +70,17 @@ def check_stages(files):
         cells = [e['cell'] for e in evs]
         wed = [e['cell'] for e in evs if e.get('kind') == 'wedding']
         bir = [e['cell'] for e in evs if e.get('kind') == 'birth']
+        job = [e['cell'] for e in evs if e.get('kind') == 'job']
+        shop = [e['cell'] for e in evs if e.get('kind') == 'shop']
         nrm = [e for e in evs if e.get('kind', 'normal') == 'normal']
+        known = {'normal', 'wedding', 'birth', 'job', 'shop'}
+        bad_kind = [e.get('kind') for e in evs if e.get('kind', 'normal') not in known]
+        if bad_kind:
+            err('未知のkind: %s' % set(bad_kind))
+        if not job:
+            warn('しごとマスがありません')
+        if not shop:
+            warn('おみせマスがありません')
         mv = [e for e in nrm if e.get('move', 0) != 0]
         b = st.get('branchCell', -1)
 
@@ -101,8 +111,9 @@ def check_stages(files):
                 err('cell %d の group は 1〜4' % e['cell'])
         if st.get('bg') not in files:
             err('盤面背景 %s がありません' % st.get('bg'))
-        ok('イベント%d件 (通常%d 💒%d 👶%d) 移動あり%d/なし%d あな%d'
-           % (len(evs), len(nrm), len(wed), len(bir), len(mv), len(nrm) - len(mv), b))
+        ok('イベント%d件 (通常%d 💒%d 👶%d 💼%d 🛒%d) 移動あり%d/なし%d あな%d'
+           % (len(evs), len(nrm), len(wed), len(bir), len(job), len(shop),
+              len(mv), len(nrm) - len(mv), b))
     return d
 
 
@@ -172,6 +183,54 @@ def check_cave(files, stages_doc):
     ok('イベント%d件 マス%d 復帰+%d' % (len(evs), n, skip))
 
 
+def check_jobs(files):
+    print('\n=== jobs.json ===')
+    path = os.path.join(ASSETS, 'jobs.json')
+    try:
+        d = json.load(open(path, encoding='utf-8'))
+    except Exception as e:
+        err('JSONとして読めません: %s' % e)
+        return
+    if d.get('schemaVersion') != 1:
+        err('schemaVersion が 1 ではありません')
+
+    skills = d.get('skills', [])
+    jobs = d.get('jobs', [])
+    sid = [s['id'] for s in skills]
+    jid = [j['id'] for j in jobs]
+    if len(sid) != len(set(sid)):
+        err('スキルidが重複')
+    if len(jid) != len(set(jid)):
+        err('職業idが重複')
+    if not jobs:
+        err('職業が1つもありません')
+
+    # 必要スキルが実在するか（存在しないと永久に就けない職業になる）
+    for j in jobs:
+        miss = set(j.get('requires', [])) - set(sid)
+        if miss:
+            err('%s: 実在しないスキルを要求 %s' % (j['id'], miss))
+
+    # スキル無しで就ける職業が最低1つないと、就職マスが機能しない
+    free = [j for j in jobs if not j.get('requires')]
+    if not free:
+        err('必要スキルなしで就ける職業がありません')
+
+    # 全スキルを買える現実性: 一番安いスキル <= 初期資金 + 給料1回分
+    start = d.get('startMoney', 0)
+    base = max((j['salary'] for j in free), default=0)
+    cheapest = min((s['cost'] for s in skills), default=0)
+    if skills and cheapest > start + base:
+        warn('一番安いスキル(%d)が 初期資金+給料(%d) を超えています'
+             % (cheapest, start + base))
+
+    for s in skills:
+        if not (0 <= s.get('dice', 0) <= 3):
+            err('%s: dice は 0〜3' % s['id'])
+    ok('スキル%d件 職業%d件 初期資金%d（スキル不要の職業%d件）'
+       % (len(skills), len(jobs), start, len(free)))
+
+
 def check_kotlin():
     print('\n=== Kotlin ===')
     for fn in ('MainActivity.kt', 'GameData.kt', 'EditorScreens.kt', 'Zukan.kt'):
@@ -195,6 +254,7 @@ def main():
     print('drawable: %d件' % len(files))
     doc = check_stages(files)
     check_cave(files, doc)
+    check_jobs(files)
     check_kotlin()
 
     print('\n' + '=' * 40)

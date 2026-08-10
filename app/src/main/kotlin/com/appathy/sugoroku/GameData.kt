@@ -107,6 +107,8 @@ object GameData {
     private fun parseKind(s: String?): MainActivity.EventKind = when (s?.lowercase()) {
         "wedding" -> MainActivity.EventKind.WEDDING
         "birth" -> MainActivity.EventKind.BIRTH
+        "job" -> MainActivity.EventKind.JOB
+        "shop" -> MainActivity.EventKind.SHOP
         else -> MainActivity.EventKind.NORMAL
     }
 
@@ -124,6 +126,8 @@ object GameData {
         val base: JSONObject? = when (kind) {
             MainActivity.EventKind.WEDDING -> shared?.optJSONObject("wedding")
             MainActivity.EventKind.BIRTH -> shared?.optJSONObject("birth")
+            MainActivity.EventKind.JOB -> shared?.optJSONObject("job")
+            MainActivity.EventKind.SHOP -> shared?.optJSONObject("shop")
             else -> null
         }
         fun str(key: String, def: String): String =
@@ -288,6 +292,124 @@ object GameData {
         )
 
         return LoadResult(BoardData(name, cellCount, boardBg, events, returnSkip), warnings)
+    }
+
+    // ---------------- 職業・スキル（v4.2）----------------
+
+    data class SkillDef(
+        val id: String, val name: String, val icon: String,
+        val cost: Int, val desc: String,
+        /** 常時のルーレット補正 */
+        val dice: Int = 0
+    )
+
+    data class JobDef(
+        val id: String, val name: String, val icon: String,
+        val salary: Int, val requires: List<String>,
+        val dManpuku: Int, val dJuujitsu: Int, val dYuujou: Int,
+        val desc: String
+    )
+
+    data class JobsData(
+        val startMoney: Int,
+        val skills: List<SkillDef>,
+        val jobs: List<JobDef>,
+        val warnings: List<String>
+    )
+
+    /**
+     * assets/jobs.json を読む。読めなければ最低限の「むしょく」だけを持つデータを返し、
+     * 職業システムが無効な状態でもゲームが成立するようにする。
+     */
+    fun loadJobs(context: Context): JobsData {
+        val warnings = ArrayList<String>()
+        val fallback = JobsData(
+            100,
+            emptyList(),
+            listOf(JobDef("none", "むしょく", "🌱", 30, emptyList(), 0, 0, 0, "")),
+            warnings
+        )
+        val raw = readJson(context, "jobs.json") ?: run {
+            warnings.add("jobs.json を読み込めませんでした")
+            return fallback
+        }
+        val root = try {
+            JSONObject(raw)
+        } catch (e: Exception) {
+            warnings.add("jobs.json のJSON構文が不正です")
+            return fallback
+        }
+        if (root.optInt("schemaVersion", 0) != 1) warnings.add("jobs.json: 未対応のschemaVersion")
+
+        val skills = ArrayList<SkillDef>()
+        root.optJSONArray("skills")?.let { arr ->
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                val id = o.optString("id", "")
+                if (id.isBlank()) {
+                    warnings.add("skills[$i]: id が空")
+                    continue
+                }
+                skills.add(
+                    SkillDef(
+                        id = id,
+                        name = o.optString("name", id),
+                        icon = o.optString("icon", "⭐"),
+                        cost = o.optInt("cost", 100).coerceAtLeast(0),
+                        desc = o.optString("desc", ""),
+                        dice = o.optInt("dice", 0).coerceIn(0, 3)
+                    )
+                )
+            }
+        } ?: warnings.add("jobs.json: skills がありません")
+
+        val skillIds = skills.map { it.id }.toSet()
+        val jobs = ArrayList<JobDef>()
+        root.optJSONArray("jobs")?.let { arr ->
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                val id = o.optString("id", "")
+                if (id.isBlank()) {
+                    warnings.add("jobs[$i]: id が空")
+                    continue
+                }
+                val req = ArrayList<String>()
+                o.optJSONArray("requires")?.let { r ->
+                    for (k in 0 until r.length()) {
+                        val sid = r.optString(k, "")
+                        if (sid.isNotBlank()) {
+                            // 存在しないスキルを要求する職業は永久に就けないので弾く
+                            if (sid in skillIds) req.add(sid)
+                            else warnings.add("$id: 未知のスキル $sid を要求")
+                        }
+                    }
+                }
+                jobs.add(
+                    JobDef(
+                        id = id,
+                        name = o.optString("name", id),
+                        icon = o.optString("icon", "💼"),
+                        salary = o.optInt("salary", 0).coerceAtLeast(0),
+                        requires = req,
+                        dManpuku = o.optInt("manpuku", 0),
+                        dJuujitsu = o.optInt("juujitsu", 0),
+                        dYuujou = o.optInt("yuujou", 0),
+                        desc = o.optString("desc", "")
+                    )
+                )
+            }
+        } ?: warnings.add("jobs.json: jobs がありません")
+
+        if (jobs.isEmpty()) {
+            warnings.add("jobs.json: 有効な職業が1つもありません")
+            return fallback
+        }
+        return JobsData(
+            startMoney = root.optInt("startMoney", 100).coerceAtLeast(0),
+            skills = skills,
+            jobs = jobs,
+            warnings = warnings
+        )
     }
 
     // ---------------- 保存・復元（v4.1 イベントエディタ用）----------------

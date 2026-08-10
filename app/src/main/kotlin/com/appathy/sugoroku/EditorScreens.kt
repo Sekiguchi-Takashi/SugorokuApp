@@ -163,6 +163,8 @@ class EditorScreens(
                 val mark = when (ev.kind) {
                     MainActivity.EventKind.WEDDING -> "💒 "
                     MainActivity.EventKind.BIRTH -> "👶 "
+                    MainActivity.EventKind.JOB -> "💼 "
+                    MainActivity.EventKind.SHOP -> "🛒 "
                     else -> ""
                 }
                 col.addView(TextView(act).apply {
@@ -290,17 +292,21 @@ class EditorScreens(
                 val mark = when (kind) {
                     "wedding" -> "💒 けっこん"
                     "birth" -> "👶 あかちゃん"
+                    "job" -> "💼 しごと"
+                    "shop" -> "🛒 おみせ"
                     else -> o.optString("message", "").replace("\n", " ").take(24)
                 }
                 val color = when (kind) {
                     "wedding" -> Color.parseColor("#AD1457")
                     "birth" -> Color.parseColor("#EF6C00")
+                    "job" -> Color.parseColor("#00897B")
+                    "shop" -> Color.parseColor("#D84315")
                     else -> Color.parseColor("#7CB342")
                 }
                 addView(
                     listButton("${cell}マスめ", mark, color) {
                         if (kind == "normal") showEventEdit(file, stageIndex, i, title)
-                        else toast("けっこん・あかちゃんの マスは かえられません")
+                        else toast("とくべつな マスは かえられません")
                     },
                     LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,

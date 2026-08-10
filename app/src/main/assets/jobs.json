@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "startMoney": 200,
+  "clearSalaryNote": "ステージをクリアするたびに きゅうりょうが もらえる",
+  "skills": [
+    {
+      "id": "menkyo",
+      "name": "うんてん めんきょ",
+      "icon": "🚗",
+      "cost": 80,
+      "desc": "くるまに のれる。はいたつやさんに なれる",
+      "dice": 0
+    },
+    {
+      "id": "ryori",
+      "name": "りょうりの うで",
+      "icon": "🍳",
+      "cost": 100,
+      "desc": "りょうりが とくい。コックさんに なれる",
+      "dice": 0
+    },
+    {
+      "id": "benkyo",
+      "name": "べんきょうの ちから",
+      "icon": "📚",
+      "cost": 130,
+      "desc": "あたまが よくなる。せんせいに なれる",
+      "dice": 0
+    },
+    {
+      "id": "taiiku",
+      "name": "たいりょく",
+      "icon": "💪",
+      "cost": 110,
+      "desc": "からだが じょうぶ。ルーレットが いつも +1",
+      "dice": 1
+    },
+    {
+      "id": "ongaku",
+      "name": "おんがくの さいのう",
+      "icon": "🎵",
+      "cost": 150,
+      "desc": "うたが うまい。ミュージシャンに なれる",
+      "dice": 0
+    }
+  ],
+  "jobs": [
+    {
+      "id": "none",
+      "name": "むしょく",
+      "icon": "🌱",
+      "salary": 50,
+      "requires": [],
+      "manpuku": 0,
+      "juujitsu": 0,
+      "yuujou": 0,
+      "desc": "まだ しごとを していない"
+    },
+    {
+      "id": "hanaya",
+      "name": "はなやさん",
+      "icon": "💐",
+      "salary": 100,
+      "requires": [],
+      "manpuku": 0,
+      "juujitsu": 3,
+      "yuujou": 2,
+      "desc": "だれでも なれる。おはなを うる"
+    },
+    {
+      "id": "haitatsu",
+      "name": "はいたつやさん",
+      "icon": "📦",
+      "salary": 140,
+      "requires": [
+        "menkyo"
+      ],
+      "manpuku": 0,
+      "juujitsu": 0,
+      "yuujou": 4,
+      "desc": "うんてん めんきょが ひつよう"
+    },
+    {
+      "id": "cook",
+      "name": "コックさん",
+      "icon": "🍳",
+      "salary": 170,
+      "requires": [
+        "ryori"
+      ],
+      "manpuku": 5,
+      "juujitsu": 2,
+      "yuujou": 0,
+      "desc": "りょうりの うでが ひつよう"
+    },
+    {
+      "id": "sensei",
+      "name": "せんせい",
+      "icon": "🏫",
+      "salary": 200,
+      "requires": [
+        "benkyo"
+      ],
+      "manpuku": 0,
+      "juujitsu": 5,
+      "yuujou": 3,
+      "desc": "べんきょうの ちからが ひつよう"
+    },
+    {
+      "id": "sports",
+      "name": "スポーツせんしゅ",
+      "icon": "⚽",
+      "salary": 230,
+      "requires": [
+        "taiiku"
+      ],
+      "manpuku": -2,
+      "juujitsu": 3,
+      "yuujou": 5,
+      "desc": "たいりょくが ひつよう"
+    },
+    {
+      "id": "musician",
+      "name": "ミュージシャン",
+      "icon": "🎸",
+      "salary": 260,
+      "requires": [
+        "ongaku"
+      ],
+      "manpuku": 0,
+      "juujitsu": 4,
+      "yuujou": 6,
+      "desc": "おんがくの さいのうが ひつよう"
+    },
+    {
+      "id": "shacho",
+      "name": "しゃちょう",
+      "icon": "👔",
+      "salary": 340,
+      "requires": [
+        "benkyo",
+        "menkyo"
+      ],
+      "manpuku": 2,
+      "juujitsu": 5,
+      "yuujou": 5,
+      "desc": "べんきょうと めんきょの りょうほうが ひつよう"
+    }
+  ]
+}

@@ -44,12 +44,15 @@ class MainActivity : Activity() {
         var hasChild: Boolean = false,   // 子どもが生まれると2.0倍
         var inCave: Boolean = false,     // 洞窟ルートを進行中
         var caveReturn: Int = 0,         // 洞窟を抜けたときに復帰する本線のマス
-        val humanNo: Int = 0             // 人間プレイヤーの番号（1P/2P）。CPUは0
+        val humanNo: Int = 0,            // 人間プレイヤーの番号（1P/2P）。CPUは0
+        var money: Int = 0,              // 所持金
+        var jobId: String = "none",      // 就いている職業のid
+        val skills: MutableSet<String> = HashSet()   // 取得済みスキルのid
     ) {
         val total: Int get() = manpuku + juujitsu + yuujou
     }
 
-    enum class EventKind { NORMAL, WEDDING, BIRTH }
+    enum class EventKind { NORMAL, WEDDING, BIRTH, JOB, SHOP }
 
     data class GameEvent(
         val bgRes: Int,
@@ -82,6 +85,9 @@ class MainActivity : Activity() {
         const val MARRIED_MULTIPLIER = 1.5f  // 結婚後のイベント上昇倍率（プラスのみ）
         const val CHILD_MULTIPLIER = 2.0f    // 子どもが生まれた後の倍率
         const val CLEAR_BONUS = 10           // ステージ1着ボーナス（充実・友情に加算）
+        const val SKILL_SCORE = 10           // スキル1つあたりのスコア
+        const val MARRIED_SCORE = 30         // けっこんのスコア
+        const val CHILD_SCORE = 50           // こどものスコア
     }
 
     object Speed {
@@ -113,6 +119,27 @@ class MainActivity : Activity() {
     /** 洞窟の盤面背景（cave.json の bg） */
     private var caveBgRes: Int = 0
 
+    /** 職業・スキル（assets/jobs.json） */
+    private var jobsData: GameData.JobsData =
+        GameData.JobsData(100, emptyList(), emptyList(), emptyList())
+
+    private fun jobOf(id: String): GameData.JobDef? = jobsData.jobs.firstOrNull { it.id == id }
+    private fun skillOf(id: String): GameData.SkillDef? = jobsData.skills.firstOrNull { it.id == id }
+
+    /**
+     * 最終スコア。
+     * ためこむだけで勝てないよう、しごととスキルへの投資も点になるようにしている。
+     *   ステータス合計 ＋ おかね/10 ＋ きゅうりょう/10 ＋ スキル数×10 ＋ かぞく
+     */
+    private fun scoreOf(p: Player): Int {
+        var s = p.total + p.money / 10
+        s += (jobOf(p.jobId)?.salary ?: 0) / 10
+        s += p.skills.size * Skill.SKILL_SCORE
+        if (p.married) s += Skill.MARRIED_SCORE
+        if (p.hasChild) s += Skill.CHILD_SCORE
+        return s
+    }
+
     /** 分岐マスから何マス先の本線に復帰するか（cave.json の returnSkip） */
     private var CAVE_SKIP = 20
 
@@ -128,6 +155,10 @@ class MainActivity : Activity() {
         caveBgRes = cave.data.bgRes
         Board.CAVE_COUNT = caveCellCount
         warnings.addAll(cave.warnings)
+
+        // 職業・スキル
+        jobsData = GameData.loadJobs(this)
+        warnings.addAll(jobsData.warnings)
 
         // 本線ステージ
         val st = GameData.loadStages(this)
@@ -194,6 +225,8 @@ class MainActivity : Activity() {
         Board.normalEventCells = stage.events.filterValues { it.kind == EventKind.NORMAL }.keys
         Board.weddingCells = stage.events.filterValues { it.kind == EventKind.WEDDING }.keys
         Board.birthCells = stage.events.filterValues { it.kind == EventKind.BIRTH }.keys
+        Board.jobCells = stage.events.filterValues { it.kind == EventKind.JOB }.keys
+        Board.shopCells = stage.events.filterValues { it.kind == EventKind.SHOP }.keys
         Board.branchCell = stage.branchCell
         Board.caveEventCells = caveEvents.keys
     }
@@ -270,32 +303,43 @@ class MainActivity : Activity() {
     // ---------------- キャラ選択画面 ----------------
     private fun showCharaSelect() {
         handler.removeCallbacksAndMessages(null)
-        showCharaGrid("1P の キャラクターを えらんでね", charas) { c -> showCountSelect(c) }
+        showCharaGrid(
+            title = "1P の キャラクターを えらぼう",
+            options = charas,
+            step = 1,
+            sub = "きみが うごかす どうぶつだよ",
+            onBack = { showTitle() }
+        ) { c -> showModeSelect(c) }
     }
 
-    /** キャラ選択のグリッドを表示する共通処理 */
-    private fun showCharaGrid(title: String, options: List<Chara>, onPick: (Chara) -> Unit) {
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setBackgroundColor(Color.parseColor("#E8F5E9"))
-            setPadding(dp(16), dp(24), dp(16), dp(16))
-        }
-        root.addView(TextView(this).apply {
-            text = title
-            textSize = 20f
-            setTextColor(Color.parseColor("#33691E"))
-            gravity = Gravity.CENTER
-            typeface = Typeface.DEFAULT_BOLD
-            setPadding(0, 0, 0, dp(16))
-        })
+    /**
+     * キャラ選択のグリッド。1Pと2Pの両方で使う共通処理。
+     * @param step ステップ表示に使う番号（1P選択=1、2P選択=2）
+     * @param onBack もどるボタンの遷移先。null なら表示しない
+     */
+    private fun showCharaGrid(
+        title: String,
+        options: List<Chara>,
+        step: Int = 1,
+        sub: String? = null,
+        onBack: (() -> Unit)? = null,
+        onPick: (Chara) -> Unit
+    ) {
+        val root = baseColumn().apply { gravity = Gravity.CENTER_HORIZONTAL }
+        root.addView(stepBar(step))
+        root.addView(titleText(title))
+        root.addView(subText(sub ?: "タップして えらんでね"))
+
         val grid = GridLayout(this).apply { rowCount = 2; columnCount = 2 }
-        val cellSize = min(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels) / 2 - dp(32)
+        val cellSize = min(
+            resources.displayMetrics.widthPixels,
+            resources.displayMetrics.heightPixels
+        ) / 2 - dp(36)
         for (c in options) {
             val cell = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                setPadding(dp(8), dp(8), dp(8), dp(8))
+                setPadding(dp(6), dp(6), dp(6), dp(6))
             }
             cell.addView(ImageButton(this).apply {
                 setImageResource(c.resId)
@@ -309,84 +353,302 @@ class MainActivity : Activity() {
                 textSize = 16f
                 gravity = Gravity.CENTER
                 setTextColor(Color.parseColor("#33691E"))
+                typeface = Typeface.DEFAULT_BOLD
             })
             grid.addView(cell)
         }
         root.addView(grid)
+        onBack?.let { root.addView(backButtonView(it)) }
         setContentView(ScrollView(this).apply { addView(root) })
     }
 
-    // ---------------- 人数選択画面 ----------------
-    private fun showCountSelect(myChara: Chara) {
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setBackgroundColor(Color.parseColor("#E8F5E9"))
-            setPadding(dp(24), dp(20), dp(24), dp(20))
-        }
-        root.addView(TextView(this).apply {
-            text = "なんびきで あそぶ？"
-            textSize = 22f
-            setTextColor(Color.parseColor("#33691E"))
-            gravity = Gravity.CENTER
-            typeface = Typeface.DEFAULT_BOLD
-            setPadding(0, 0, 0, dp(6))
-        })
-        root.addView(TextView(this).apply {
-            text = "1P は ${myChara.name}。\nにんげん ふたりのときは 1だいのスマホを じゅんばんに つかうよ"
-            textSize = 13f
-            setTextColor(Color.parseColor("#558B2F"))
-            gravity = Gravity.CENTER
-            setPadding(0, 0, 0, dp(14))
-        })
-        // Triple(合計人数, 人間の人数, ボタン表示)
-        val combos = listOf(
-            Triple(1, 1, "ひとりで あそぶ"),
-            Triple(2, 1, "2ひき　1P ＋ CPU1"),
-            Triple(2, 2, "2ひき　1P ＋ 2P（ふたりで）"),
-            Triple(3, 1, "3ひき　1P ＋ CPU2"),
-            Triple(3, 2, "3ひき　1P ＋ 2P ＋ CPU1"),
-            Triple(4, 1, "4ひき　1P ＋ CPU3"),
-            Triple(4, 2, "4ひき　1P ＋ 2P ＋ CPU2")
+    // ---------------- あそびかた選択（ステップ2/3）----------------
+
+    /**
+     * 「ひとりで」か「ふたりで」かだけを聞く画面。
+     * 以前は 合計人数×人間の人数 の7通りを1画面に並べていて分かりにくかったため、
+     * 「だれと」→「なんびき」の2段階に分けている。
+     */
+    private fun showModeSelect(p1: Chara) {
+        val root = baseColumn()
+        root.addView(stepBar(2))
+        root.addView(titleText("だれと あそぶ？"))
+        root.addView(subText("1P は ${p1.name}"))
+
+        root.addView(
+            modeCard(
+                icons = listOf(p1.resId),
+                cpuCount = 3,
+                title = "ひとりで あそぶ",
+                desc = "あいてを コンピュータが うごかすよ",
+                color = Color.parseColor("#7CB342")
+            ) { showTotalSelect(p1, null) }
         )
-        for ((total, humans, label) in combos) {
-            root.addView(Button(this).apply {
-                text = label
-                textSize = 17f
-                setTextColor(Color.WHITE)
-                background = roundedBg(
-                    if (humans == 2) Color.parseColor("#00897B") else Color.parseColor("#7CB342")
-                )
-                setPadding(dp(8), dp(12), dp(8), dp(12))
-                setOnClickListener {
-                    if (humans == 2) showSecondPlayerSelect(myChara, total)
-                    else buildPlayers(myChara, null, total)
-                }
-            }, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dp(8) })
-        }
+        root.addView(
+            modeCard(
+                icons = listOf(p1.resId),
+                cpuCount = 0,
+                secondSlot = true,
+                title = "ふたりで あそぶ",
+                desc = "1だいの スマホを こうたいで つかうよ",
+                color = Color.parseColor("#00897B")
+            ) { showSecondPlayerSelect(p1) }
+        )
+
+        root.addView(backButtonView { showCharaSelect() })
         setContentView(ScrollView(this).apply { addView(root) })
     }
 
     /** 2人目の人間プレイヤーのキャラを選ぶ */
-    private fun showSecondPlayerSelect(firstChara: Chara, total: Int) {
-        showCharaGrid("2P の キャラクターを えらんでね", charas.filter { it != firstChara }) { c ->
-            buildPlayers(firstChara, c, total)
+    private fun showSecondPlayerSelect(p1: Chara) {
+        showCharaGrid(
+            title = "2P の キャラクターを えらぼう",
+            options = charas.filter { it != p1 },
+            step = 2,
+            sub = "ふたりめの ひとが うごかす どうぶつ",
+            onBack = { showModeSelect(p1) }
+        ) { p2 -> showTotalSelect(p1, p2) }
+    }
+
+    // ---------------- 何匹で遊ぶか（ステップ3/3）----------------
+
+    /**
+     * 合計何匹で遊ぶかを選ぶ。
+     * 実際のキャラ画像を並べて「誰が出るか」を目で見て分かるようにしている。
+     */
+    private fun showTotalSelect(p1: Chara, p2: Chara?) {
+        val humans = if (p2 == null) 1 else 2
+        val root = baseColumn()
+        root.addView(stepBar(3))
+        root.addView(titleText("なんびきで あそぶ？"))
+        root.addView(subText(
+            if (p2 == null) "きみは ${p1.name}"
+            else "1P ${p1.name}　2P ${p2.name}"
+        ))
+
+        val others = charas.filter { it != p1 && it != p2 }
+        for (total in humans..4) {
+            val cpu = total - humans
+            val icons = ArrayList<Int>()
+            icons.add(p1.resId)
+            p2?.let { icons.add(it.resId) }
+            for (i in 0 until cpu) icons.add(others[i].resId)
+
+            val label = when {
+                cpu == 0 && humans == 1 -> "ひとりだけ"
+                cpu == 0 -> "ふたりだけ"
+                else -> "CPU $cpu ひき"
+            }
+            root.addView(
+                lineupCard(total, humans, icons, label,
+                    if (cpu == 0) Color.parseColor("#00897B") else Color.parseColor("#7CB342")
+                ) { buildPlayers(p1, p2, total) }
+            )
         }
+
+        root.addView(backButtonView {
+            if (p2 == null) showModeSelect(p1) else showSecondPlayerSelect(p1)
+        })
+        setContentView(ScrollView(this).apply { addView(root) })
+    }
+
+    // ---------------- 選択画面のパーツ ----------------
+
+    private fun baseColumn() = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setBackgroundColor(Color.parseColor("#E8F5E9"))
+        setPadding(dp(18), dp(16), dp(18), dp(20))
+    }
+
+    /** 今どのステップにいるかを点で示す */
+    private fun stepBar(current: Int): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, dp(10))
+        }
+        val names = listOf("キャラ", "あそびかた", "にんずう")
+        for (i in 1..3) {
+            row.addView(TextView(this).apply {
+                text = if (i == current) "● ${names[i - 1]}" else "○ ${names[i - 1]}"
+                textSize = 12f
+                setTextColor(
+                    if (i == current) Color.parseColor("#33691E") else Color.parseColor("#A5B5A0")
+                )
+                typeface = if (i == current) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+                setPadding(dp(6), 0, dp(6), 0)
+            })
+        }
+        return row
+    }
+
+    private fun titleText(t: String) = TextView(this).apply {
+        text = t
+        textSize = 23f
+        setTextColor(Color.parseColor("#33691E"))
+        gravity = Gravity.CENTER
+        typeface = Typeface.DEFAULT_BOLD
+    }
+
+    private fun subText(t: String) = TextView(this).apply {
+        text = t
+        textSize = 13f
+        setTextColor(Color.parseColor("#558B2F"))
+        gravity = Gravity.CENTER
+        setPadding(0, dp(4), 0, dp(14))
+    }
+
+    private fun backButtonView(onClick: () -> Unit) = Button(this).apply {
+        text = "◀ もどる"
+        textSize = 14f
+        setTextColor(Color.WHITE)
+        background = roundedBg(Color.parseColor("#90A4AE"))
+        setPadding(dp(10), dp(8), dp(10), dp(8))
+        setOnClickListener { onClick() }
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            topMargin = dp(20)
+            gravity = Gravity.CENTER_HORIZONTAL
+        }
+    }
+
+    /** キャラ画像を1つ置く（?マークのプレースホルダにもできる） */
+    private fun charaIcon(resId: Int?, size: Int): View =
+        if (resId != null) ImageView(this).apply {
+            setImageResource(resId)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            layoutParams = LinearLayout.LayoutParams(size, size)
+        } else TextView(this).apply {
+            text = "？"
+            textSize = 22f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            background = roundedBg(Color.parseColor("#B0BEC5"))
+            layoutParams = LinearLayout.LayoutParams(size, size)
+        }
+
+    /** 「ひとりで／ふたりで」のカード */
+    private fun modeCard(
+        icons: List<Int>,
+        cpuCount: Int,
+        secondSlot: Boolean = false,
+        title: String,
+        desc: String,
+        color: Int,
+        onClick: () -> Unit
+    ): View {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = roundedBg(color)
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            isClickable = true
+            setOnClickListener { onClick() }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(10) }
+        }
+        card.addView(TextView(this).apply {
+            text = title
+            textSize = 19f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+        })
+        card.addView(TextView(this).apply {
+            text = desc
+            textSize = 12f
+            setTextColor(Color.parseColor("#E8F5E9"))
+            setPadding(0, dp(2), 0, dp(8))
+        })
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        for (r in icons) row.addView(charaIcon(r, dp(52)))
+        if (secondSlot) {
+            row.addView(TextView(this).apply {
+                text = "＋"
+                textSize = 18f
+                setTextColor(Color.WHITE)
+                setPadding(dp(4), 0, dp(4), 0)
+            })
+            row.addView(charaIcon(null, dp(52)))
+        }
+        if (cpuCount > 0) {
+            row.addView(TextView(this).apply {
+                text = "＋ CPU"
+                textSize = 14f
+                setTextColor(Color.WHITE)
+                setPadding(dp(6), 0, 0, 0)
+            })
+        }
+        card.addView(row)
+        return card
+    }
+
+    /** 「N匹であそぶ」のカード。出てくる animals を実際の絵で見せる */
+    private fun lineupCard(
+        total: Int,
+        humans: Int,
+        icons: List<Int>,
+        label: String,
+        color: Int,
+        onClick: () -> Unit
+    ): View {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = roundedBg(color)
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            isClickable = true
+            setOnClickListener { onClick() }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(10) }
+        }
+        card.addView(TextView(this).apply {
+            text = "${total}ひき　（$label）"
+            textSize = 17f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+        })
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(6), 0, 0)
+        }
+        for ((i, r) in icons.withIndex()) {
+            val col = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(0, 0, dp(6), 0)
+            }
+            col.addView(charaIcon(r, dp(48)))
+            col.addView(TextView(this).apply {
+                text = if (i < humans) "${i + 1}P" else "CPU"
+                textSize = 11f
+                gravity = Gravity.CENTER
+                setTextColor(Color.WHITE)
+                typeface = if (i < humans) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+            })
+            row.addView(col)
+        }
+        card.addView(row)
+        return card
     }
 
     /** プレイヤー構成を作ってゲーム開始 */
     private fun buildPlayers(p1: Chara, p2: Chara?, total: Int) {
         players.clear()
-        players.add(Player(p1, isHuman = true, humanNo = 1))
-        if (p2 != null) players.add(Player(p2, isHuman = true, humanNo = 2))
+        players.add(Player(p1, isHuman = true, humanNo = 1, money = jobsData.startMoney))
+        if (p2 != null) players.add(Player(p2, isHuman = true, humanNo = 2, money = jobsData.startMoney))
         val used = players.map { it.chara }.toSet()
         val rest = charas.filter { it !in used }
         var i = 0
         while (players.size < total && i < rest.size) {
-            players.add(Player(rest[i], isHuman = false))
+            players.add(Player(rest[i], isHuman = false, money = jobsData.startMoney))
             i++
         }
         turn = 0
@@ -413,7 +675,7 @@ class MainActivity : Activity() {
             setPadding(dp(12), 0, dp(12), 0)
         }
         infoRow.addView(TextView(this).apply {
-            text = "ステージ${stageIndex + 1}/${stages.size}「${stage.name}」\n⭐イベント 💒けっこん 👶あかちゃん 「あな」どうくつへ\nすすむ・もどるは イベントの中でおきるよ"
+            text = "ステージ${stageIndex + 1}/${stages.size}「${stage.name}」\n⭐イベント 💒けっこん 👶あかちゃん 💼しごと 🛒おみせ\n「あな」どうくつへ / すすむ・もどるは イベントの中で"
             textSize = 11f
             setTextColor(Color.parseColor("#558B2F"))
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
@@ -542,8 +804,11 @@ class MainActivity : Activity() {
         else if (me.married) bonus.append("　💍x${Skill.MARRIED_MULTIPLIER}")
         if (me.yuujou >= Skill.YUUJOU_THRESHOLD) bonus.append("　🤝+${Skill.YUUJOU_BONUS}")
         if (me.boostNext) bonus.append("　🍖+${Skill.MANPUKU_BONUS}")
+        val sd = me.skills.sumOf { skillOf(it)?.dice ?: 0 }
+        if (sd > 0) bonus.append("　💪+$sd")
         val tag = if (me.isHuman && players.count { it.isHuman } >= 2) "${me.humanNo}P " else ""
-        statsBar.text = "${tag}満腹 ${me.manpuku}　　充実 ${me.juujitsu}　　友情 ${me.yuujou}$bonus"
+        val job = jobOf(me.jobId)?.icon ?: ""
+        statsBar.text = "${tag}満腹${me.manpuku} 充実${me.juujitsu} 友情${me.yuujou} 💰${me.money}$job$bonus"
     }
 
     private fun updateSkillButtons() {
@@ -558,11 +823,19 @@ class MainActivity : Activity() {
 
     private fun showStatusDialog() {
         val sb = StringBuilder("ステージ${stageIndex + 1}/${stages.size}「${stage.name}」\n\n")
-        for (p in players.sortedByDescending { it.total }) {
+        for (p in players.sortedByDescending { scoreOf(it) }) {
             sb.append("${who(p)}　ごうけい ${p.total}\n")
             val where = if (p.inCave) "どうくつ" else "ほんせん"
             sb.append("  $where ${p.position} / ${Board.goal(p.inCave)}\n")
             sb.append("  満腹 ${p.manpuku}　充実 ${p.juujitsu}　友情 ${p.yuujou}\n")
+            val j = jobOf(p.jobId)
+            sb.append("  おかね ${p.money}")
+            if (j != null) sb.append("　しごと ${j.icon}${j.name}（きゅうりょう ${j.salary}）")
+            sb.append("\n")
+            if (p.skills.isNotEmpty()) {
+                val names = p.skills.mapNotNull { skillOf(it) }.joinToString("、") { "${it.icon}${it.name}" }
+                sb.append("  スキル $names\n")
+            }
             val marks = ArrayList<String>()
             if (p.hasChild) marks.add("👶こども あり（イベント${Skill.CHILD_MULTIPLIER}倍）")
             else if (p.married) marks.add("💍けっこん済み（イベント${Skill.MARRIED_MULTIPLIER}倍）")
@@ -685,6 +958,12 @@ class MainActivity : Activity() {
             steps += Skill.YUUJOU_BONUS
             extras.append(" 🤝+${Skill.YUUJOU_BONUS}")
         }
+        // 取得スキルによる常時ボーナス（例: たいりょく → +1）
+        val skillDice = p.skills.sumOf { skillOf(it)?.dice ?: 0 }
+        if (skillDice > 0) {
+            steps += skillDice
+            extras.append(" 💪+$skillDice")
+        }
         statusText.text = if (extras.isEmpty()) "${p.chara.name} は「$steps」！"
                           else "${p.chara.name} は「$raw」$extras → $steps マス！"
         updateStatsBar()
@@ -727,6 +1006,8 @@ class MainActivity : Activity() {
         EventKind.NORMAL -> true
         EventKind.WEDDING -> !p.married
         EventKind.BIRTH -> p.married && !p.hasChild
+        EventKind.JOB -> jobsData.jobs.size > 1        // 選べる職業があるときだけ
+        EventKind.SHOP -> jobsData.skills.isNotEmpty() // 売るものがあるときだけ
     }
 
     private fun onLanded(p: Player, fromEvent: Boolean) {
@@ -746,7 +1027,11 @@ class MainActivity : Activity() {
                 val where = if (p.inCave) Zukan.CAVE else stage.name
                 Zukan.record(this, where, p.position)
             }
-            showEvent(p, ev)
+            when (ev.kind) {
+                EventKind.JOB -> showJobSelect(p, ev)
+                EventKind.SHOP -> showShop(p, ev)
+                else -> showEvent(p, ev)
+            }
             return
         }
         nextTurn()
@@ -834,6 +1119,16 @@ class MainActivity : Activity() {
     private fun stageClear(winner: Player) {
         winner.juujitsu = (winner.juujitsu + Skill.CLEAR_BONUS).coerceIn(0, 999)
         winner.yuujou = (winner.yuujou + Skill.CLEAR_BONUS).coerceIn(0, 999)
+        // ステージ終了時、全員が給料をもらい職業のステータス補正を受ける
+        val payLines = StringBuilder()
+        for (p in players) {
+            val j = jobOf(p.jobId) ?: continue
+            p.money += j.salary
+            p.manpuku = (p.manpuku + j.dManpuku).coerceIn(0, 999)
+            p.juujitsu = (p.juujitsu + j.dJuujitsu).coerceIn(0, 999)
+            p.yuujou = (p.yuujou + j.dYuujou).coerceIn(0, 999)
+            payLines.append("${j.icon}${who(p)} +${j.salary}\n")
+        }
         updateStatsBar()
         if (stageIndex >= stages.size - 1) {
             showFinalResult(winner)
@@ -845,8 +1140,9 @@ class MainActivity : Activity() {
             .setMessage(
                 "${who(winner)} が 1ばんに ゴール！\n" +
                 "1ちゃくボーナス 充実+${Skill.CLEAR_BONUS}　友情+${Skill.CLEAR_BONUS}\n\n" +
+                "【 きゅうりょう 】\n$payLines\n" +
                 "つぎは「${next.name}」！\nみんなで すすもう。\n" +
-                "（ステータス・けっこん・こどもは そのまま）"
+                "（ステータス・けっこん・こども・しごとは そのまま）"
             )
             .setCancelable(false)
             .setPositiveButton("つぎのステージへ") { _, _ ->
@@ -860,9 +1156,11 @@ class MainActivity : Activity() {
     }
 
     private fun showFinalResult(winner: Player) {
-        val ranking = players.sortedByDescending { it.total }
+        val ranking = players.sortedByDescending { scoreOf(it) }
         val sb = StringBuilder()
-        sb.append("さいごに ゴールしたのは ${who(winner)}！\n\n【 ごうけいスコア 】\n")
+        sb.append("さいごに ゴールしたのは ${who(winner)}！\n\n" +
+            "【 スコア = ステータス + おかね÷10 + きゅうりょう÷10\n" +
+            "　　　　+ スキル×10 + かぞく 】\n")
         for ((i, p) in ranking.withIndex()) {
             val medal = when (i) { 0 -> "🥇"; 1 -> "🥈"; 2 -> "🥉"; else -> "　" }
             val name = who(p)
@@ -871,8 +1169,10 @@ class MainActivity : Activity() {
                 p.married -> " 💍"
                 else -> ""
             }
-            sb.append("$medal $name$fam　${p.total}\n")
-            sb.append("　　満腹${p.manpuku} 充実${p.juujitsu} 友情${p.yuujou}\n")
+            val j = jobOf(p.jobId)
+            sb.append("$medal $name$fam${j?.icon ?: ""}　${scoreOf(p)}てん\n")
+            sb.append("　　満腹${p.manpuku} 充実${p.juujitsu} 友情${p.yuujou}" +
+                " 💰${p.money} 💪${p.skills.size}\n")
         }
         AlertDialog.Builder(this)
             .setTitle("🏆 ぜんステージ クリア！")
@@ -883,6 +1183,7 @@ class MainActivity : Activity() {
                     it.position = 0; it.manpuku = 0; it.juujitsu = 0; it.yuujou = 0
                     it.boostNext = false; it.married = false; it.hasChild = false
                     it.inCave = false; it.caveReturn = 0
+                    it.money = jobsData.startMoney; it.jobId = "none"; it.skills.clear()
                 }
                 stageIndex = 0
                 turn = 0
@@ -902,6 +1203,200 @@ class MainActivity : Activity() {
             else -> 1f
         }
         return Math.round(delta * mul)
+    }
+
+    // ---------------- 就職イベント ----------------
+
+    /**
+     * 就職マス。必要スキルを満たす職業だけ選べる。
+     * CPUは条件を満たすなかで最も給料の高い職業を自動で選ぶ。
+     */
+    private fun showJobSelect(p: Player, ev: GameEvent) {
+        val available = jobsData.jobs.filter { j -> p.skills.containsAll(j.requires) }
+        if (available.isEmpty()) {
+            nextTurn()
+            return
+        }
+        if (!p.isHuman) {
+            val best = available.maxByOrNull { it.salary } ?: available.first()
+            p.jobId = best.id
+            statusText.text = "${who(p)} は ${best.icon}${best.name} に なった！"
+            updateStatsBar()
+            handler.postDelayed({ nextTurn() }, Speed.eventWaitMs)
+            return
+        }
+
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+        }
+        content.addView(ImageView(this).apply {
+            setImageResource(ev.bgRes)
+            adjustViewBounds = true
+            scaleType = ImageView.ScaleType.FIT_CENTER
+        })
+        content.addView(TextView(this).apply {
+            text = ev.message
+            textSize = 15f
+            setTextColor(Color.parseColor("#263238"))
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = roundedBg(Color.WHITE, Color.parseColor("#33691E"))
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(8) })
+
+        val dialog = AlertDialog.Builder(this)
+            .setView(ScrollView(this).apply { addView(content) })
+            .setCancelable(false)
+            .create()
+
+        for (j in available) {
+            val cur = if (j.id == p.jobId) "（いまの しごと）" else ""
+            val bonus = buildString {
+                if (j.dManpuku != 0) append(" 満腹${plus(j.dManpuku)}")
+                if (j.dJuujitsu != 0) append(" 充実${plus(j.dJuujitsu)}")
+                if (j.dYuujou != 0) append(" 友情${plus(j.dYuujou)}")
+            }
+            content.addView(Button(this).apply {
+                text = "${j.icon} ${j.name}$cur\nきゅうりょう ${j.salary}$bonus"
+                textSize = 14f
+                setTextColor(Color.WHITE)
+                background = roundedBg(Color.parseColor("#00897B"))
+                setPadding(dp(8), dp(10), dp(8), dp(10))
+                setOnClickListener {
+                    p.jobId = j.id
+                    statusText.text = "${j.icon} ${j.name} に なった！"
+                    updateStatsBar()
+                    dialog.dismiss()
+                    nextTurn()
+                }
+            }, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(6) })
+        }
+        content.addView(Button(this).apply {
+            text = "いまは やめておく"
+            textSize = 13f
+            setTextColor(Color.WHITE)
+            background = roundedBg(Color.parseColor("#78909C"))
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            setOnClickListener {
+                dialog.dismiss()
+                nextTurn()
+            }
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(12) })
+
+        dialog.show()
+    }
+
+    private fun plus(v: Int): String = if (v > 0) "+$v" else "$v"
+
+    // ---------------- お店（スキル購入）----------------
+
+    /**
+     * お店マス。おかねを払ってスキルを買う。
+     * CPUは買えるなかで最も安いものを1つだけ買う（買い占めて有利になりすぎないように）。
+     */
+    private fun showShop(p: Player, ev: GameEvent) {
+        val sellable = jobsData.skills.filter { it.id !in p.skills }
+        if (sellable.isEmpty()) {
+            nextTurn()
+            return
+        }
+        if (!p.isHuman) {
+            val buy = sellable.filter { it.cost <= p.money }.minByOrNull { it.cost }
+            if (buy != null) {
+                p.money -= buy.cost
+                p.skills.add(buy.id)
+                statusText.text = "${who(p)} は ${buy.icon}${buy.name} を てにいれた！"
+                updateStatsBar()
+            }
+            handler.postDelayed({ nextTurn() }, Speed.eventWaitMs)
+            return
+        }
+
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+        }
+        content.addView(ImageView(this).apply {
+            setImageResource(ev.bgRes)
+            adjustViewBounds = true
+            scaleType = ImageView.ScaleType.FIT_CENTER
+        })
+        val moneyLabel = TextView(this).apply {
+            text = "もっている おかね: ${p.money}"
+            textSize = 15f
+            gravity = Gravity.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.parseColor("#263238"))
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = roundedBg(Color.WHITE, Color.parseColor("#33691E"))
+        }
+        content.addView(moneyLabel, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(8) })
+
+        val dialog = AlertDialog.Builder(this)
+            .setView(ScrollView(this).apply { addView(content) })
+            .setCancelable(false)
+            .create()
+
+        val buttons = HashMap<String, Button>()
+        for (sk in sellable) {
+            val b = Button(this).apply {
+                text = "${sk.icon} ${sk.name}  ${sk.cost}\n${sk.desc}"
+                textSize = 13f
+                setTextColor(Color.WHITE)
+                background = roundedBg(Color.parseColor("#6A1B9A"))
+                setPadding(dp(8), dp(10), dp(8), dp(10))
+                setOnClickListener {
+                    if (p.money < sk.cost) return@setOnClickListener
+                    p.money -= sk.cost
+                    p.skills.add(sk.id)
+                    moneyLabel.text = "もっている おかね: ${p.money}"
+                    isEnabled = false
+                    alpha = 0.4f
+                    text = "${sk.icon} ${sk.name}  かった！"
+                    // 買った結果、他の商品が買えなくなることがあるので毎回すべて更新する
+                    for ((id, btn) in buttons) {
+                        val s2 = skillOf(id) ?: continue
+                        if (id !in p.skills) {
+                            btn.isEnabled = p.money >= s2.cost
+                            btn.alpha = if (btn.isEnabled) 1f else 0.4f
+                        }
+                    }
+                    updateStatsBar()
+                }
+            }
+            b.isEnabled = p.money >= sk.cost
+            b.alpha = if (b.isEnabled) 1f else 0.4f
+            buttons[sk.id] = b
+            content.addView(b, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(6) })
+        }
+        content.addView(Button(this).apply {
+            text = "おみせを でる"
+            textSize = 15f
+            setTextColor(Color.WHITE)
+            background = roundedBg(Color.parseColor("#78909C"))
+            setPadding(dp(8), dp(10), dp(8), dp(10))
+            setOnClickListener {
+                dialog.dismiss()
+                nextTurn()
+            }
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(12) })
+
+        dialog.show()
     }
 
     // ---------------- イベント表示（汎用） ----------------
@@ -1010,6 +1505,8 @@ class MainActivity : Activity() {
         var birthCells: Set<Int> = emptySet()
         var branchCell: Int = -1
 
+        var jobCells: Set<Int> = emptySet()
+        var shopCells: Set<Int> = emptySet()
         var caveEventCells: Set<Int> = emptySet()
 
         fun count(cave: Boolean) = if (cave) CAVE_COUNT else MAIN_COUNT
@@ -1066,6 +1563,8 @@ class MainActivity : Activity() {
         private val eventPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#CE93D8") }
         private val weddingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#F8BBD0") }
         private val babyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FFE082") }
+        private val jobPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#80CBC4") }
+        private val shopPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FFAB91") }
         private val branchPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#7E57C2") }
         private val branchTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE; textAlign = Paint.Align.CENTER; typeface = Typeface.DEFAULT_BOLD
@@ -1205,6 +1704,8 @@ class MainActivity : Activity() {
             lockedBirth(i) -> cellPaint
             i in Board.birthCells -> babyPaint
             i in Board.weddingCells -> weddingPaint
+            i in Board.jobCells -> jobPaint
+            i in Board.shopCells -> shopPaint
             i in Board.normalEventCells -> eventPaint
             else -> cellPaint
         }
@@ -1249,6 +1750,8 @@ class MainActivity : Activity() {
                     lockedBirth(i) -> canvas.drawText("$i", x, laneY + textPaint.textSize / 3, textPaint)
                     !world && i in Board.birthCells -> canvas.drawText("👶", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
                     !world && i in Board.weddingCells -> canvas.drawText("💒", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
+                    !world && i in Board.jobCells -> canvas.drawText("💼", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
+                    !world && i in Board.shopCells -> canvas.drawText("🛒", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
                     i in eventCells -> canvas.drawText("⭐", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
                     else -> canvas.drawText("$i", x, laneY + textPaint.textSize / 3, textPaint)
                 }
