@@ -174,7 +174,7 @@ def check_cave(files, stages_doc):
 
 def check_kotlin():
     print('\n=== Kotlin ===')
-    for fn in ('MainActivity.kt', 'GameData.kt'):
+    for fn in ('MainActivity.kt', 'GameData.kt', 'EditorScreens.kt', 'Zukan.kt'):
         path = os.path.join(KOTLIN, fn)
         if not os.path.exists(path):
             err('%s がありません' % fn)

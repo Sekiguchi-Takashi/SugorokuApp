@@ -223,10 +223,48 @@ class MainActivity : Activity() {
         root.addView(Button(this).apply {
             text = "はじめる"
             textSize = 20f
+            setTextColor(Color.WHITE)
+            background = roundedBg(Color.parseColor("#FF9800"))
             setPadding(dp(48), dp(16), dp(48), dp(16))
             setOnClickListener { showCharaSelect() }
         })
+
+        val subRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(0, dp(20), 0, 0)
+        }
+        subRow.addView(Button(this).apply {
+            text = "📖 ずかん"
+            textSize = 15f
+            setTextColor(Color.WHITE)
+            background = roundedBg(Color.parseColor("#4CAF50"))
+            setPadding(dp(18), dp(10), dp(18), dp(10))
+            setOnClickListener { editorScreens.showZukan() }
+        })
+        subRow.addView(Button(this).apply {
+            text = "✏️ エディタ"
+            textSize = 15f
+            setTextColor(Color.WHITE)
+            background = roundedBg(Color.parseColor("#5E35B1"))
+            setPadding(dp(18), dp(10), dp(18), dp(10))
+            setOnClickListener { editorScreens.showEditorTop() }
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { leftMargin = dp(12) })
+        root.addView(subRow)
+
         setContentView(root)
+    }
+
+    /** エディタ・図鑑の画面。データを編集したら読み直してタイトルに戻す */
+    private val editorScreens by lazy {
+        EditorScreens(
+            act = this,
+            onBack = { showTitle() },
+            onDataChanged = { loadGameData() }
+        )
     }
 
     // ---------------- キャラ選択画面 ----------------
@@ -703,6 +741,11 @@ class MainActivity : Activity() {
         }
         val ev = if (p.inCave) caveEvents[p.position] else stage.events[p.position]
         if (ev != null && !fromEvent && eventAvailable(p, ev)) {
+            // 図鑑に記録（人間が出会ったものだけ。CPUの遭遇では埋まらない）
+            if (p.isHuman) {
+                val where = if (p.inCave) Zukan.CAVE else stage.name
+                Zukan.record(this, where, p.position)
+            }
             showEvent(p, ev)
             return
         }

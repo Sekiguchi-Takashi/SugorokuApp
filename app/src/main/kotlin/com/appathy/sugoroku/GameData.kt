@@ -290,6 +290,53 @@ object GameData {
         return LoadResult(BoardData(name, cellCount, boardBg, events, returnSkip), warnings)
     }
 
+    // ---------------- 保存・復元（v4.1 イベントエディタ用）----------------
+
+    /**
+     * 生のJSON文字列を取得する（filesDir優先）。エディタが読み書きの起点に使う。
+     */
+    fun rawJson(context: Context, fileName: String): String? = readJson(context, fileName)
+
+    /** assets の初期データをそのまま返す（「はじめに戻す」用） */
+    fun rawAssetJson(context: Context, fileName: String): String? = try {
+        context.assets.open(fileName).use { it.readBytes().toString(Charsets.UTF_8) }
+    } catch (e: Exception) {
+        Log.e(TAG, "assets読み込み失敗: $fileName", e)
+        null
+    }
+
+    /**
+     * filesDir にJSONを保存する。
+     * 破損防止のため一時ファイルへ書いてから rename する。
+     * @return 成功したら true
+     */
+    fun saveJson(context: Context, fileName: String, content: String): Boolean {
+        return try {
+            // 保存前に構文チェック。壊れたJSONを書き込むと次回起動で読めなくなる
+            JSONObject(content)
+            val tmp = File(context.filesDir, "$fileName.tmp")
+            tmp.writeText(content, Charsets.UTF_8)
+            val dst = File(context.filesDir, fileName)
+            if (dst.exists()) dst.delete()
+            val ok = tmp.renameTo(dst)
+            if (!ok) Log.e(TAG, "rename失敗: $fileName")
+            ok
+        } catch (e: Exception) {
+            Log.e(TAG, "保存失敗: $fileName", e)
+            false
+        }
+    }
+
+    /** filesDir の編集済みデータを消して assets の初期状態に戻す */
+    fun resetToAssets(context: Context, fileName: String): Boolean {
+        val f = File(context.filesDir, fileName)
+        return if (f.exists()) f.delete() else true
+    }
+
+    /** ユーザーが編集したデータが存在するか */
+    fun hasUserData(context: Context, fileName: String): Boolean =
+        File(context.filesDir, fileName).exists()
+
     /** 洞窟データを読み込む */
     fun loadCave(context: Context): LoadResult =
         loadBoard(context, "cave.json", "どうくつ", MainActivity.Board.CAVE_COUNT)
