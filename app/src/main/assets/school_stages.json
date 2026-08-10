@@ -1,0 +1,271 @@
+{
+  "schemaVersion": 1,
+  "mainCellCount": 30,
+  "statNames": [
+    "勉強",
+    "運動",
+    "モテモテ"
+  ],
+  "shared": {
+    "exam": {
+      "bg": "bg_kyoshitsu",
+      "message": "じゅけんの ひが やってきた！",
+      "manpuku": 0,
+      "juujitsu": 0,
+      "yuujou": 0,
+      "group": 1,
+      "move": 0
+    }
+  },
+  "stages": [
+    {
+      "name": "しょうがっこう",
+      "bg": "bg_ground",
+      "branchCell": -1,
+      "events": [
+        {
+          "cell": 1,
+          "bg": "bg_tsugakuro",
+          "kind": "normal",
+          "message": "みんなで がっこうへ あるいた。\n運動+5　モテモテ+3",
+          "manpuku": 0,
+          "juujitsu": 5,
+          "yuujou": 3,
+          "group": 3,
+          "move": 0
+        },
+        {
+          "cell": 2,
+          "bg": "bg_getabako",
+          "kind": "normal",
+          "message": "くつばこに てがみが はいってた！\nモテモテ+12",
+          "manpuku": 0,
+          "juujitsu": 0,
+          "yuujou": 12,
+          "group": 1,
+          "move": 0,
+          "condStat": 2,
+          "condMin": 25,
+          "condBonus1": 0,
+          "condBonus2": 0,
+          "condBonus3": 8,
+          "condMessage": "運動が たかいので さらに モテモテ+8！"
+        },
+        {
+          "cell": 3,
+          "bg": "bg_kyoshitsu",
+          "kind": "normal",
+          "message": "じゅぎょうを まじめに うけた。\n勉強+10",
+          "manpuku": 10,
+          "juujitsu": 0,
+          "yuujou": 0,
+          "group": 1,
+          "move": 0
+        },
+        {
+          "cell": 5,
+          "bg": "bg_item_boshi",
+          "kind": "normal",
+          "message": "きいろい ぼうしを わすれた…。\nモテモテ-8",
+          "manpuku": 0,
+          "juujitsu": 0,
+          "yuujou": -8,
+          "group": 1,
+          "move": 0
+        },
+        {
+          "cell": 6,
+          "bg": "bg_ground",
+          "kind": "normal",
+          "message": "こうていで かけっこ。\n運動+12",
+          "manpuku": 0,
+          "juujitsu": 12,
+          "yuujou": 0,
+          "group": 4,
+          "move": 0
+        },
+        {
+          "cell": 8,
+          "bg": "bg_toshoshitsu",
+          "kind": "normal",
+          "message": "としょしつで 本を よんだ。\n勉強+12",
+          "manpuku": 12,
+          "juujitsu": 0,
+          "yuujou": 0,
+          "group": 1,
+          "move": 0
+        },
+        {
+          "cell": 9,
+          "bg": "bg_item_randoseru",
+          "kind": "normal",
+          "message": "ランドセルを わすれて とりに もどった…。\n2マス もどる",
+          "manpuku": 0,
+          "juujitsu": 0,
+          "yuujou": 0,
+          "group": 1,
+          "move": -2
+        },
+        {
+          "cell": 10,
+          "bg": "bg_rikashitsu",
+          "kind": "normal",
+          "message": "りかの じっけんを した。\n勉強+10",
+          "manpuku": 10,
+          "juujitsu": 0,
+          "yuujou": 0,
+          "group": 2,
+          "move": 0
+        },
+        {
+          "cell": 11,
+          "bg": "bg_hokenshitsu",
+          "kind": "normal",
+          "message": "ほけんしつで やすんだ…。\n運動-10",
+          "manpuku": 0,
+          "juujitsu": -10,
+          "yuujou": 0,
+          "group": 1,
+          "move": 0
+        },
+        {
+          "cell": 12,
+          "bg": "bg_okujo",
+          "kind": "normal",
+          "message": "おくじょうで ひるやすみ。\nモテモテ+10",
+          "manpuku": 0,
+          "juujitsu": 0,
+          "yuujou": 10,
+          "group": 2,
+          "move": 0,
+          "condStat": 2,
+          "condMin": 25,
+          "condBonus1": 0,
+          "condBonus2": 0,
+          "condBonus3": 8,
+          "condMessage": "運動が たかいので さらに モテモテ+8！"
+        },
+        {
+          "cell": 14,
+          "bg": "bg_gym",
+          "kind": "normal",
+          "message": "たいいくかんで ドッジボール。\n運動+15",
+          "manpuku": 0,
+          "juujitsu": 15,
+          "yuujou": 0,
+          "group": 4,
+          "move": 0
+        },
+        {
+          "cell": 15,
+          "bg": "bg_item_recorder",
+          "kind": "normal",
+          "message": "リコーダーの テストが あった。\n勉強+8",
+          "manpuku": 8,
+          "juujitsu": 0,
+          "yuujou": 0,
+          "group": 1,
+          "move": 0
+        },
+        {
+          "cell": 17,
+          "bg": "bg_kateika",
+          "kind": "normal",
+          "message": "かていかで りょうりを つくった。\n勉強+5　モテモテ+8",
+          "manpuku": 5,
+          "juujitsu": 0,
+          "yuujou": 8,
+          "group": 3,
+          "move": 0
+        },
+        {
+          "cell": 18,
+          "bg": "bg_shokuinshitsu",
+          "kind": "normal",
+          "message": "しょくいんしつに よばれた…。\n勉強-5　モテモテ-5",
+          "manpuku": -5,
+          "juujitsu": 0,
+          "yuujou": -5,
+          "group": 1,
+          "move": 0
+        },
+        {
+          "cell": 20,
+          "bg": "bg_pool",
+          "kind": "normal",
+          "message": "プールで きろくを だした。\n運動+15",
+          "manpuku": 0,
+          "juujitsu": 15,
+          "yuujou": 0,
+          "group": 3,
+          "move": 0,
+          "condStat": 2,
+          "condMin": 30,
+          "condBonus1": 0,
+          "condBonus2": 5,
+          "condBonus3": 5,
+          "condMessage": "運動が たかいので せんしゅに えらばれた！"
+        },
+        {
+          "cell": 21,
+          "bg": "bg_item_flask",
+          "kind": "normal",
+          "message": "フラスコを わって しまった…。\n勉強-8　3マス もどる",
+          "manpuku": -8,
+          "juujitsu": 0,
+          "yuujou": 0,
+          "group": 1,
+          "move": -3
+        },
+        {
+          "cell": 22,
+          "bg": "bg_toshoshitsu",
+          "kind": "normal",
+          "message": "テストの べんきょうを した。\n勉強+15",
+          "manpuku": 15,
+          "juujitsu": 0,
+          "yuujou": 0,
+          "group": 1,
+          "move": 0
+        },
+        {
+          "cell": 24,
+          "bg": "bg_item_lamp",
+          "kind": "normal",
+          "message": "じっけんが せいこうした！\n勉強+12",
+          "manpuku": 12,
+          "juujitsu": 0,
+          "yuujou": 0,
+          "group": 2,
+          "move": 0
+        },
+        {
+          "cell": 25,
+          "bg": "bg_tsugakuro",
+          "kind": "normal",
+          "message": "かえりみち みんなで あそんだ。\n運動+8　モテモテ+8",
+          "manpuku": 0,
+          "juujitsu": 8,
+          "yuujou": 8,
+          "group": 4,
+          "move": 0
+        },
+        {
+          "cell": 26,
+          "bg": "bg_kyoshitsu",
+          "kind": "normal",
+          "message": "しゅくだいを わすれた…。\n勉強-10",
+          "manpuku": -10,
+          "juujitsu": 0,
+          "yuujou": 0,
+          "group": 1,
+          "move": 0
+        },
+        {
+          "cell": 28,
+          "kind": "exam"
+        }
+      ]
+    }
+  ]
+}

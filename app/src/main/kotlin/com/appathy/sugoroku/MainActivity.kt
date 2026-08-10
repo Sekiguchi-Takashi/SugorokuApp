@@ -47,12 +47,13 @@ class MainActivity : Activity() {
         val humanNo: Int = 0,            // 人間プレイヤーの番号（1P/2P）。CPUは0
         var money: Int = 0,              // 所持金
         var jobId: String = "none",      // 就いている職業のid
+        var passedExam: Boolean = false, // 受験に合格したか
         val skills: MutableSet<String> = HashSet()   // 取得済みスキルのid
     ) {
         val total: Int get() = manpuku + juujitsu + yuujou
     }
 
-    enum class EventKind { NORMAL, WEDDING, BIRTH, JOB, SHOP }
+    enum class EventKind { NORMAL, WEDDING, BIRTH, JOB, SHOP, EXAM }
 
     data class GameEvent(
         val bgRes: Int,
@@ -63,7 +64,17 @@ class MainActivity : Activity() {
         val groupSize: Int = 1,
         val kind: EventKind = EventKind.NORMAL,
         /** イベントの結果すすむ/もどるマス数。0なら移動なし（0のイベントが多数） */
-        val dMove: Int = 0
+        val dMove: Int = 0,
+        /**
+         * 条件ボーナス。指定ステータス(1〜3)が condMin 以上なら追加で加算する。
+         * 例: 運動が25以上なら モテモテ+8
+         */
+        val condStat: Int = 0,
+        val condMin: Int = 0,
+        val condBonus1: Int = 0,
+        val condBonus2: Int = 0,
+        val condBonus3: Int = 0,
+        val condMessage: String = ""
     )
 
     /** 1ステージ分の盤面定義 */
@@ -88,6 +99,15 @@ class MainActivity : Activity() {
         const val SKILL_SCORE = 10           // スキル1つあたりのスコア
         const val MARRIED_SCORE = 30         // けっこんのスコア
         const val CHILD_SCORE = 50           // こどものスコア
+    }
+
+    /**
+     * あそびかたのモード。ステージ定義ファイルとステータス名がモードごとに変わる。
+     * 小学校版は今後 中学校 → 高校 → 大学 とステージを足していく予定。
+     */
+    enum class GameMode(val title: String, val desc: String, val file: String) {
+        NORMAL("つうじょう版", "どうぶつの まちで じんせいを あるく", "stages.json"),
+        SCHOOL("しょうがっこう版", "べんきょう・運動・モテモテで じゅけんに いどむ", "school_stages.json")
     }
 
     /**
@@ -142,6 +162,12 @@ class MainActivity : Activity() {
     /** 洞窟の盤面背景（cave.json の bg） */
     private var caveBgRes: Int = 0
 
+    /** 選択中のモード */
+    private var mode: GameMode = GameMode.NORMAL
+
+    /** ステータス3種の表示名（モードごとに変わる） */
+    private var statNames: List<String> = listOf("満腹", "充実", "友情")
+
     /** 職業・スキル（assets/jobs.json） */
     private var jobsData: GameData.JobsData =
         GameData.JobsData(100, emptyList(), emptyList(), emptyList())
@@ -191,8 +217,9 @@ class MainActivity : Activity() {
         jobsData = GameData.loadJobs(this)
         warnings.addAll(jobsData.warnings)
 
-        // 本線ステージ
-        val st = GameData.loadStages(this)
+        // 本線ステージ（モードごとにファイルが変わる）
+        val st = GameData.loadStages(this, mode.file)
+        statNames = st.statNames
         stages = st.stages.map {
             Stage(name = it.name, bgRes = it.bgRes, events = it.events, branchCell = it.branchCell)
         }
@@ -259,6 +286,7 @@ class MainActivity : Activity() {
         Board.birthCells = stage.events.filterValues { it.kind == EventKind.BIRTH }.keys
         Board.jobCells = stage.events.filterValues { it.kind == EventKind.JOB }.keys
         Board.shopCells = stage.events.filterValues { it.kind == EventKind.SHOP }.keys
+        Board.examCells = stage.events.filterValues { it.kind == EventKind.EXAM }.keys
         Board.badCells = stage.events.filterValues { isBad(it) }.keys
         Board.caveBadCells = caveEvents.filterValues { isBad(it) }.keys
         Board.branchCell = stage.branchCell
@@ -293,7 +321,7 @@ class MainActivity : Activity() {
             setTextColor(Color.WHITE)
             background = roundedBg(Color.parseColor("#FF9800"))
             setPadding(dp(48), dp(16), dp(48), dp(16))
-            setOnClickListener { showCharaSelect() }
+            setOnClickListener { showModeMenu() }
         })
 
         val subRow = LinearLayout(this).apply {
@@ -334,6 +362,52 @@ class MainActivity : Activity() {
         )
     }
 
+    // ---------------- モード選択画面 ----------------
+
+    /** どの「版」で遊ぶかを選ぶ。選んだあとデータを読み直す */
+    private fun showModeMenu() {
+        handler.removeCallbacksAndMessages(null)
+        val root = baseColumn().apply { gravity = Gravity.CENTER_HORIZONTAL }
+        root.addView(titleText("どの すごろくで あそぶ？"))
+        root.addView(subText("あとから タイトルで えらびなおせるよ"))
+
+        for (m in GameMode.values()) {
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                background = roundedBg(
+                    if (m == GameMode.NORMAL) Color.parseColor("#7CB342")
+                    else Color.parseColor("#29B6F6")
+                )
+                setPadding(dp(16), dp(14), dp(16), dp(14))
+                isClickable = true
+                setOnClickListener {
+                    mode = m
+                    loadGameData()      // モードごとのJSONを読み直す
+                    showCharaSelect()
+                }
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = dp(12) }
+            }
+            card.addView(TextView(this).apply {
+                text = m.title
+                textSize = 21f
+                setTextColor(Color.WHITE)
+                typeface = Typeface.DEFAULT_BOLD
+            })
+            card.addView(TextView(this).apply {
+                text = m.desc
+                textSize = 13f
+                setTextColor(Color.parseColor("#F1F8E9"))
+                setPadding(0, dp(4), 0, 0)
+            })
+            root.addView(card)
+        }
+        root.addView(backButtonView { showTitle() })
+        setContentView(ScrollView(this).apply { addView(root) })
+    }
+
     // ---------------- キャラ選択画面 ----------------
     private fun showCharaSelect() {
         handler.removeCallbacksAndMessages(null)
@@ -342,7 +416,7 @@ class MainActivity : Activity() {
             options = charas,
             step = 1,
             sub = "きみが うごかす どうぶつだよ",
-            onBack = { showTitle() }
+            onBack = { showModeMenu() }
         ) { c -> showModeSelect(c) }
     }
 
@@ -714,8 +788,9 @@ class MainActivity : Activity() {
         }
         infoRow.addView(TextView(this).apply {
             text = "ステージ${stageIndex + 1}/${stages.size}「${stage.name}」\n" +
-                "🟢いいこと 🟣わるいこと 🟠ワープ 🩷けっこん・出産\n" +
-                "🩵しごと 🟡おみせ"
+                "🟢いいこと 🟣わるいこと 🩵しごと 🟡おみせ\n" +
+                if (mode == GameMode.SCHOOL) "🔴じゅけん（${statNames[0]}が たかいと ごうかくしやすい）"
+                else "🟠ワープ 🩷けっこん・出産"
             textSize = 11f
             setTextColor(Color.parseColor("#558B2F"))
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
@@ -776,7 +851,7 @@ class MainActivity : Activity() {
             setTextColor(Color.WHITE)
             background = roundedBg(Color.parseColor("#EF6C00"))
             setPadding(dp(4), dp(8), dp(4), dp(8))
-            text = "🍖満腹${Skill.MANPUKU_COST}→+${Skill.MANPUKU_BONUS}"
+            text = "🍖${statNames[0]}${Skill.MANPUKU_COST}→+${Skill.MANPUKU_BONUS}"
             setOnClickListener { useManpukuSkill() }
         }
         skillRow.addView(manpukuSkillButton, LinearLayout.LayoutParams(
@@ -789,7 +864,7 @@ class MainActivity : Activity() {
             setTextColor(Color.WHITE)
             background = roundedBg(Color.parseColor("#6A1B9A"))
             setPadding(dp(4), dp(8), dp(4), dp(8))
-            text = "✨充実${Skill.JUUJITSU_COST}→みんな-${Skill.JUUJITSU_PUSH}"
+            text = "✨${statNames[1]}${Skill.JUUJITSU_COST}→みんな-${Skill.JUUJITSU_PUSH}"
             setOnClickListener { useJuujitsuSkill() }
         }
         skillRow.addView(juujitsuSkillButton, LinearLayout.LayoutParams(
@@ -877,7 +952,8 @@ class MainActivity : Activity() {
         if (sd > 0) bonus.append("　💪+$sd")
         val tag = if (me.isHuman && players.count { it.isHuman } >= 2) "${me.humanNo}P " else ""
         val job = jobOf(me.jobId)?.icon ?: ""
-        statsBar.text = "${tag}満腹${me.manpuku} 充実${me.juujitsu} 友情${me.yuujou} 💰${me.money}$job$bonus"
+        statsBar.text = "$tag${statNames[0]}${me.manpuku} ${statNames[1]}${me.juujitsu} " +
+            "${statNames[2]}${me.yuujou} 💰${me.money}$job$bonus"
     }
 
     private fun updateSkillButtons() {
@@ -896,7 +972,8 @@ class MainActivity : Activity() {
             sb.append("${who(p)}　ごうけい ${p.total}\n")
             val where = if (p.inCave) "どうくつ" else "ほんせん"
             sb.append("  $where ${p.position} / ${Board.goal(p.inCave)}\n")
-            sb.append("  満腹 ${p.manpuku}　充実 ${p.juujitsu}　友情 ${p.yuujou}\n")
+            sb.append("  ${statNames[0]} ${p.manpuku}　${statNames[1]} ${p.juujitsu}" +
+                "　${statNames[2]} ${p.yuujou}\n")
             val j = jobOf(p.jobId)
             sb.append("  おかね ${p.money}")
             if (j != null) sb.append("　しごと ${j.icon}${j.name}（きゅうりょう ${j.salary}）")
@@ -1077,6 +1154,7 @@ class MainActivity : Activity() {
         EventKind.BIRTH -> p.married && !p.hasChild
         EventKind.JOB -> jobsData.jobs.size > 1        // 選べる職業があるときだけ
         EventKind.SHOP -> jobsData.skills.isNotEmpty() // 売るものがあるときだけ
+        EventKind.EXAM -> true
     }
 
     private fun onLanded(p: Player, fromEvent: Boolean) {
@@ -1099,6 +1177,7 @@ class MainActivity : Activity() {
             when (ev.kind) {
                 EventKind.JOB -> showJobSelect(p, ev)
                 EventKind.SHOP -> showShop(p, ev)
+                EventKind.EXAM -> showExam(p, ev)
                 else -> showEvent(p, ev)
             }
             return
@@ -1240,8 +1319,8 @@ class MainActivity : Activity() {
             }
             val j = jobOf(p.jobId)
             sb.append("$medal $name$fam${j?.icon ?: ""}　${scoreOf(p)}てん\n")
-            sb.append("　　満腹${p.manpuku} 充実${p.juujitsu} 友情${p.yuujou}" +
-                " 💰${p.money} 💪${p.skills.size}\n")
+            sb.append("　　${statNames[0]}${p.manpuku} ${statNames[1]}${p.juujitsu}" +
+                " ${statNames[2]}${p.yuujou} 💰${p.money} 💪${p.skills.size}\n")
         }
         AlertDialog.Builder(this)
             .setTitle("🏆 ぜんステージ クリア！")
@@ -1253,6 +1332,7 @@ class MainActivity : Activity() {
                     it.boostNext = false; it.married = false; it.hasChild = false
                     it.inCave = false; it.caveReturn = 0
                     it.money = jobsData.startMoney; it.jobId = "none"; it.skills.clear()
+                    it.passedExam = false
                 }
                 stageIndex = 0
                 turn = 0
@@ -1261,6 +1341,14 @@ class MainActivity : Activity() {
             }
             .setNegativeButton("タイトルへ") { _, _ -> showTitle() }
             .show()
+    }
+
+    /** 条件ボーナスの発動判定。condStat が 1〜3 のときだけ働く */
+    private fun meetsCond(p: Player, ev: GameEvent): Boolean = when (ev.condStat) {
+        1 -> p.manpuku >= ev.condMin
+        2 -> p.juujitsu >= ev.condMin
+        3 -> p.yuujou >= ev.condMin
+        else -> false
     }
 
     /** 家族が増えるほどプラスのステータス上昇が大きくなる（マイナスはそのまま） */
@@ -1468,6 +1556,83 @@ class MainActivity : Activity() {
         dialog.show()
     }
 
+    // ---------------- 受験イベント ----------------
+
+    /** 受験の合格率(%)。ステータス1（勉強）が高いほど受かりやすい */
+    private fun passRate(p: Player): Int =
+        (Exam.BASE_RATE + p.manpuku).coerceIn(Exam.MIN_RATE, Exam.MAX_RATE)
+
+    object Exam {
+        const val BASE_RATE = 30     // 勉強0でもこの確率では受かる
+        const val MIN_RATE = 20
+        const val MAX_RATE = 95      // 勉強が高くても必ず受かるわけではない
+        const val PASS_GAIN = 20     // 合格時に全ステータスへ加算
+        const val FAIL_LOSS = 3      // 不合格時のステータス減
+        const val FAIL_MOVE = -2     // 不合格時に戻るマス数（再挑戦できる）
+    }
+
+    /**
+     * 受験マス。勉強が高いほど合格しやすい。
+     * 合格すると全ステータスが上がり、不合格なら少し戻ってやり直せる。
+     */
+    private fun showExam(p: Player, ev: GameEvent) {
+        val rate = passRate(p)
+        val passed = Random.nextInt(100) < rate
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+        }
+        content.addView(ImageView(this).apply {
+            setImageResource(ev.bgRes)
+            adjustViewBounds = true
+            scaleType = ImageView.ScaleType.FIT_CENTER
+        })
+        val msg = StringBuilder(ev.message)
+        msg.append("\n\n${statNames[0]} ${p.manpuku} → ごうかくりつ ${rate}%\n\n")
+        if (passed) {
+            msg.append("🌸 ごうかく！ おめでとう！\n")
+            msg.append("${statNames[0]}・${statNames[1]}・${statNames[2]} が +${Exam.PASS_GAIN}")
+        } else {
+            msg.append("😢 ざんねん… もういちど がんばろう。\n")
+            msg.append("${statNames[0]} -${Exam.FAIL_LOSS}　${-Exam.FAIL_MOVE}マス もどる")
+        }
+        content.addView(TextView(this).apply {
+            text = msg.toString()
+            textSize = 16f
+            setTextColor(Color.parseColor("#263238"))
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            background = roundedBg(
+                Color.WHITE,
+                if (passed) Color.parseColor("#E91E63") else Color.parseColor("#5E35B1")
+            )
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(10) })
+
+        AlertDialog.Builder(this)
+            .setView(ScrollView(this).apply { addView(content) })
+            .setCancelable(false)
+            .setPositiveButton("OK") { _, _ ->
+                if (passed) {
+                    p.manpuku = (p.manpuku + gain(p, Exam.PASS_GAIN)).coerceIn(0, 999)
+                    p.juujitsu = (p.juujitsu + gain(p, Exam.PASS_GAIN)).coerceIn(0, 999)
+                    p.yuujou = (p.yuujou + gain(p, Exam.PASS_GAIN)).coerceIn(0, 999)
+                    p.passedExam = true
+                    updateStatsBar()
+                    nextTurn()
+                } else {
+                    p.manpuku = (p.manpuku - Exam.FAIL_LOSS).coerceIn(0, 999)
+                    updateStatsBar()
+                    statusText.text = "${who(p)} は ${-Exam.FAIL_MOVE}マス もどる…"
+                    handler.postDelayed(
+                        { movePiece(p, Exam.FAIL_MOVE, fromEvent = true) },
+                        Speed.eventWaitMs
+                    )
+                }
+            }
+            .show()
+    }
+
     // ---------------- イベント表示（汎用） ----------------
     private fun showEvent(p: Player, ev: GameEvent) {
         val content = LinearLayout(this).apply {
@@ -1531,12 +1696,17 @@ class MainActivity : Activity() {
         ))
         content.addView(frame)
 
+        val bonusHit = meetsCond(p, ev)
         content.addView(TextView(this).apply {
-            text = ev.message
+            text = ev.message +
+                if (bonusHit && ev.condMessage.isNotBlank()) "\n\n✨ ${ev.condMessage}" else ""
             textSize = 16f
             setTextColor(Color.parseColor("#263238"))
             setPadding(dp(14), dp(12), dp(14), dp(12))
-            background = roundedBg(Color.WHITE, Color.parseColor("#33691E"))
+            background = roundedBg(
+                Color.WHITE,
+                if (bonusHit) Color.parseColor("#F9A825") else Color.parseColor("#33691E")
+            )
         }, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = dp(10) })
@@ -1545,9 +1715,18 @@ class MainActivity : Activity() {
             .setView(ScrollView(this).apply { addView(content) })
             .setCancelable(false)
             .setPositiveButton("OK") { _, _ ->
-                p.manpuku = (p.manpuku + gain(p, ev.dManpuku)).coerceIn(0, 999)
-                p.juujitsu = (p.juujitsu + gain(p, ev.dJuujitsu)).coerceIn(0, 999)
-                p.yuujou = (p.yuujou + gain(p, ev.dYuujou)).coerceIn(0, 999)
+                var d1 = ev.dManpuku
+                var d2 = ev.dJuujitsu
+                var d3 = ev.dYuujou
+                // 条件ボーナス（例: 運動が25以上なら モテモテ+8）
+                if (meetsCond(p, ev)) {
+                    d1 += ev.condBonus1
+                    d2 += ev.condBonus2
+                    d3 += ev.condBonus3
+                }
+                p.manpuku = (p.manpuku + gain(p, d1)).coerceIn(0, 999)
+                p.juujitsu = (p.juujitsu + gain(p, d2)).coerceIn(0, 999)
+                p.yuujou = (p.yuujou + gain(p, d3)).coerceIn(0, 999)
                 if (ev.kind == EventKind.WEDDING) p.married = true
                 if (ev.kind == EventKind.BIRTH) p.hasChild = true
                 updateStatsBar()
@@ -1576,6 +1755,7 @@ class MainActivity : Activity() {
 
         var jobCells: Set<Int> = emptySet()
         var shopCells: Set<Int> = emptySet()
+        var examCells: Set<Int> = emptySet()
         /** そのマスで損をするか（ステータスがへる、または もどる） */
         var badCells: Set<Int> = emptySet()
         var caveBadCells: Set<Int> = emptySet()
@@ -1647,6 +1827,7 @@ class MainActivity : Activity() {
         private val badPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#9575CD") }
         private val warpPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FF9800") }
         private val familyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#F48FB1") }
+        private val examPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#EF5350") }
         private val jobPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#4DD0E1") }
         private val shopPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FFD54F") }
         private val branchTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -1799,6 +1980,7 @@ class MainActivity : Activity() {
             lockedBirth(i) -> cellPaint
             i in Board.birthCells -> familyPaint          // 出産 = ピンク
             i in Board.weddingCells -> familyPaint        // けっこん = ピンク
+            i in Board.examCells -> examPaint            // じゅけん = あか
             i in Board.jobCells -> jobPaint
             i in Board.shopCells -> shopPaint
             i in Board.badCells -> badPaint               // bad = むらさき
@@ -1847,6 +2029,7 @@ class MainActivity : Activity() {
                     lockedBirth(i) -> canvas.drawText("$i", x, laneY + textPaint.textSize / 3, textPaint)
                     !world && i in Board.birthCells -> canvas.drawText("👶", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
                     !world && i in Board.weddingCells -> canvas.drawText("💒", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
+                    !world && i in Board.examCells -> canvas.drawText("🌸", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
                     !world && i in Board.jobCells -> canvas.drawText("💼", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
                     !world && i in Board.shopCells -> canvas.drawText("🛒", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
                     i in badCells -> canvas.drawText("💧", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)

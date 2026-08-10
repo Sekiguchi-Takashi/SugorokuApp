@@ -46,6 +46,8 @@ object GameData {
     data class StagesResult(
         val stages: List<StageData>,
         val mainCellCount: Int,
+        /** ステータス3種の表示名。モードごとに変わる */
+        val statNames: List<String>,
         val warnings: List<String>
     ) {
         val ok: Boolean get() = warnings.isEmpty()
@@ -109,6 +111,7 @@ object GameData {
         "birth" -> MainActivity.EventKind.BIRTH
         "job" -> MainActivity.EventKind.JOB
         "shop" -> MainActivity.EventKind.SHOP
+        "exam" -> MainActivity.EventKind.EXAM
         else -> MainActivity.EventKind.NORMAL
     }
 
@@ -128,6 +131,7 @@ object GameData {
             MainActivity.EventKind.BIRTH -> shared?.optJSONObject("birth")
             MainActivity.EventKind.JOB -> shared?.optJSONObject("job")
             MainActivity.EventKind.SHOP -> shared?.optJSONObject("shop")
+            MainActivity.EventKind.EXAM -> shared?.optJSONObject("exam")
             else -> null
         }
         fun str(key: String, def: String): String =
@@ -143,7 +147,13 @@ object GameData {
             dYuujou = num("yuujou", 0),
             groupSize = num("group", 1).coerceIn(1, 4),
             kind = kind,
-            dMove = num("move", 0)
+            dMove = num("move", 0),
+            condStat = num("condStat", 0),
+            condMin = num("condMin", 0),
+            condBonus1 = num("condBonus1", 0),
+            condBonus2 = num("condBonus2", 0),
+            condBonus3 = num("condBonus3", 0),
+            condMessage = str("condMessage", "")
         )
     }
 
@@ -187,21 +197,32 @@ object GameData {
      * 本線ステージ群（stages.json）を読み込む。
      * 1ステージも読めなければ stages が空のまま返るので、呼び出し側でフォールバックすること。
      */
-    fun loadStages(context: Context): StagesResult {
+    private val DEFAULT_STATS = listOf("満腹", "充実", "友情")
+
+    /**
+     * ステージ群を読み込む。
+     * @param fileName モードごとのファイル（stages.json / school_stages.json）
+     */
+    fun loadStages(context: Context, fileName: String = "stages.json"): StagesResult {
         val warnings = ArrayList<String>()
-        val raw = readJson(context, "stages.json")
-            ?: return StagesResult(emptyList(), MainActivity.Board.MAIN_COUNT,
-                arrayListOf("stages.json を読み込めませんでした"))
+        val raw = readJson(context, fileName)
+            ?: return StagesResult(emptyList(), MainActivity.Board.MAIN_COUNT, DEFAULT_STATS,
+                arrayListOf("$fileName を読み込めませんでした"))
 
         val root = try {
             JSONObject(raw)
         } catch (e: Exception) {
-            return StagesResult(emptyList(), MainActivity.Board.MAIN_COUNT,
-                arrayListOf("stages.json のJSON構文が不正です: ${e.message}"))
+            return StagesResult(emptyList(), MainActivity.Board.MAIN_COUNT, DEFAULT_STATS,
+                arrayListOf("$fileName のJSON構文が不正です: ${e.message}"))
         }
 
+        // ステータス名（省略時はつうじょう版の名前）
+        val statNames = root.optJSONArray("statNames")?.let { arr ->
+            (0 until arr.length()).map { arr.optString(it, DEFAULT_STATS[it]) }
+        }?.takeIf { it.size == 3 } ?: DEFAULT_STATS
+
         if (root.optInt("schemaVersion", 0) != 1) {
-            warnings.add("stages.json: 未対応のschemaVersion")
+            warnings.add("$fileName: 未対応のschemaVersion")
         }
         val cellCount = root.optInt("mainCellCount", MainActivity.Board.MAIN_COUNT).let {
             if (it < 5) {
@@ -210,18 +231,19 @@ object GameData {
             } else it
         }
         val shared = root.optJSONObject("shared")
-        if (shared == null) warnings.add("stages.json: shared がありません（結婚/出産が空になります）")
+        if (shared == null) warnings.add("$fileName: shared がありません")
 
         val list = ArrayList<StageData>()
         val arr = root.optJSONArray("stages")
         if (arr == null) {
-            warnings.add("stages.json: stages 配列がありません")
+            warnings.add("$fileName: stages 配列がありません")
         } else {
             for (i in 0 until arr.length()) {
                 val o = arr.optJSONObject(i) ?: continue
                 val name = o.optString("name", "ステージ${i + 1}")
+                // -1 は「分岐なし」を意味するので警告しない
                 val branch = o.optInt("branchCell", -1)
-                if (branch !in 1..(cellCount - 2)) {
+                if (branch != -1 && branch !in 1..(cellCount - 2)) {
                     warnings.add("$name: branchCell=$branch が範囲外")
                 }
                 val events = parseEvents(
@@ -240,8 +262,8 @@ object GameData {
                 )
             }
         }
-        if (list.isEmpty()) warnings.add("stages.json: 有効なステージが1つもありません")
-        return StagesResult(list, cellCount, warnings)
+        if (list.isEmpty()) warnings.add("$fileName: 有効なステージが1つもありません")
+        return StagesResult(list, cellCount, statNames, warnings)
     }
 
     /**

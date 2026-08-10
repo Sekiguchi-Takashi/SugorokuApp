@@ -41,9 +41,9 @@ def drawables():
     return set(os.path.splitext(f)[0] for f in os.listdir(DRAWABLE))
 
 
-def check_stages(files):
-    print('\n=== stages.json ===')
-    path = os.path.join(ASSETS, 'stages.json')
+def check_stages(files, fname='stages.json'):
+    print('\n=== %s ===' % fname)
+    path = os.path.join(ASSETS, fname)
     try:
         d = json.load(open(path, encoding='utf-8'))
     except Exception as e:
@@ -54,7 +54,14 @@ def check_stages(files):
         err('schemaVersion が 1 ではありません')
     n = d.get('mainCellCount', 30)
     shared = d.get('shared', {})
-    for k in ('wedding', 'birth', 'job', 'shop'):
+    # 使われている kind の shared だけを必須にする
+    used_kinds = set()
+    for st in d.get('stages', []):
+        for e in st.get('events', []):
+            used_kinds.add(e.get('kind', 'normal'))
+    for k in ('wedding', 'birth', 'job', 'shop', 'exam'):
+        if k not in used_kinds:
+            continue
         if k not in shared:
             err('shared.%s がありません' % k)
         elif shared[k].get('bg') not in files:
@@ -63,6 +70,11 @@ def check_stages(files):
     stages = d.get('stages', [])
     if not stages:
         err('stages が空です')
+    names = d.get('statNames')
+    if names and len(names) != 3:
+        err('statNames は3つにすること')
+    if names:
+        ok('ステータス名: %s' % ' / '.join(names))
     for st in stages:
         name = st.get('name', '(名前なし)')
         print('--- %s' % name)
@@ -85,14 +97,16 @@ def check_stages(files):
             warn('わるいイベント(%d)がいいイベント(%d)より多い' % (len(bad_ev), len(good_ev)))
         if net <= 0:
             err('通常イベントの合計が %+d。ステータスが伸びずゲームが成立しません' % net)
-        known = {'normal', 'wedding', 'birth', 'job', 'shop'}
+        known = {'normal', 'wedding', 'birth', 'job', 'shop', 'exam'}
         bad_kind = [e.get('kind') for e in evs if e.get('kind', 'normal') not in known]
         if bad_kind:
             err('未知のkind: %s' % set(bad_kind))
-        if not job:
-            warn('しごとマスがありません')
-        if not shop:
-            warn('おみせマスがありません')
+        # 小学校版など、しごと・おみせを置かないモードもある
+        if fname == 'stages.json':
+            if not job:
+                warn('しごとマスがありません')
+            if not shop:
+                warn('おみせマスがありません')
         mv = [e for e in nrm if e.get('move', 0) != 0]
         b = st.get('branchCell', -1)
 
@@ -102,16 +116,26 @@ def check_stages(files):
         bad = [c for c in cells if not (1 <= c <= n - 2)]
         if bad:
             err('範囲外のマス(1〜%d): %s' % (n - 2, bad))
-        if b in cells:
-            err('branchCell %d がイベントマスと重複' % b)
-        if not (1 <= b <= 9):
-            err('branchCell %d は 1〜9 にすること（+returnSkip が盤外になる）' % b)
-        if len(wed) != 2:
-            err('結婚マスが %d 個（2個にすること）' % len(wed))
-        if len(bir) != 2:
-            err('出産マスが %d 個（2個にすること）' % len(bir))
-        if wed and bir and min(wed) >= max(bir):
-            err('最初の結婚マスより後に出産マスがありません（出産が発生不能）')
+        if b != -1:
+            if b in cells:
+                err('branchCell %d がイベントマスと重複' % b)
+            if not (1 <= b <= 9):
+                err('branchCell %d は 1〜9 にすること（+returnSkip が盤外になる）' % b)
+        exam = [e['cell'] for e in evs if e.get('kind') == 'exam']
+        if wed or bir:
+            if len(wed) != 2:
+                err('結婚マスが %d 個（2個にすること）' % len(wed))
+            if len(bir) != 2:
+                err('出産マスが %d 個（2個にすること）' % len(bir))
+            if wed and bir and min(wed) >= max(bir):
+                err('最初の結婚マスより後に出産マスがありません（出産が発生不能）')
+        # 条件ボーナスの妥当性
+        for e in nrm:
+            cs = e.get('condStat', 0)
+            if cs and cs not in (1, 2, 3):
+                err('cell %d の condStat は 1〜3' % e['cell'])
+            if cs and not (e.get('condBonus1') or e.get('condBonus2') or e.get('condBonus3')):
+                warn('cell %d に条件はあるがボーナスが0' % e['cell'])
         if len(nrm) - len(mv) <= len(mv):
             warn('移動ありイベント(%d)が多すぎます。移動なしを多数派に' % len(mv))
         for e in nrm:
@@ -123,9 +147,9 @@ def check_stages(files):
                 err('cell %d の group は 1〜4' % e['cell'])
         if st.get('bg') not in files:
             err('盤面背景 %s がありません' % st.get('bg'))
-        ok('イベント%d件 (🟢%d 🟣%d 💒%d 👶%d 💼%d 🛒%d) 移動あり%d 合計%+d あな%d'
+        ok('イベント%d件 (🟢%d 🟣%d 💒%d 👶%d 💼%d 🛒%d 🌸%d) 移動あり%d 合計%+d あな%s'
            % (len(evs), len(good_ev), len(bad_ev), len(wed), len(bir), len(job), len(shop),
-              len(mv), net, b))
+              len(exam), len(mv), net, 'なし' if b == -1 else str(b)))
     return d
 
 
@@ -264,7 +288,8 @@ def check_kotlin():
 def main():
     files = drawables()
     print('drawable: %d件' % len(files))
-    doc = check_stages(files)
+    doc = check_stages(files, 'stages.json')
+    check_stages(files, 'school_stages.json')
     check_cave(files, doc)
     check_jobs(files)
     check_kotlin()

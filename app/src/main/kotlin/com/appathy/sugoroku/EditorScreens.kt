@@ -101,9 +101,10 @@ class EditorScreens(
         val entries = ArrayList<Triple<String, Int, MainActivity.GameEvent>>()
 
         // 本線
-        val st = GameData.loadStages(act)
-        for (s in st.stages) {
-            for ((cell, ev) in s.events.toSortedMap()) entries.add(Triple(s.name, cell, ev))
+        for (file in listOf("stages.json", "school_stages.json")) {
+            for (s in GameData.loadStages(act, file).stages) {
+                for ((cell, ev) in s.events.toSortedMap()) entries.add(Triple(s.name, cell, ev))
+            }
         }
         // 洞窟
         val cave = GameData.loadCave(act)
@@ -165,6 +166,7 @@ class EditorScreens(
                     MainActivity.EventKind.BIRTH -> "👶 "
                     MainActivity.EventKind.JOB -> "💼 "
                     MainActivity.EventKind.SHOP -> "🛒 "
+                    MainActivity.EventKind.EXAM -> "🌸 "
                     else -> ""
                 }
                 col.addView(TextView(act).apply {
@@ -205,17 +207,19 @@ class EditorScreens(
                 setPadding(0, 0, 0, dp(12))
             })
 
-            val st = GameData.loadStages(act)
-            for ((i, s) in st.stages.withIndex()) {
-                addView(
-                    listButton(
-                        s.name, "イベント ${s.events.size}こ", Color.parseColor("#7CB342")
-                    ) { showCellList("stages.json", i, s.name) },
-                    LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT
-                    ).apply { topMargin = dp(8) }
-                )
+            for (file in listOf("stages.json", "school_stages.json")) {
+                val st = GameData.loadStages(act, file)
+                for ((i, s) in st.stages.withIndex()) {
+                    addView(
+                        listButton(
+                            s.name, "イベント ${s.events.size}こ", Color.parseColor("#7CB342")
+                        ) { showCellList(file, i, s.name) },
+                        LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                        ).apply { topMargin = dp(8) }
+                    )
+                }
             }
             val cave = GameData.loadCave(act)
             addView(
@@ -230,6 +234,7 @@ class EditorScreens(
 
             // 初期状態に戻す安全弁
             val edited = GameData.hasUserData(act, "stages.json") ||
+                GameData.hasUserData(act, "school_stages.json") ||
                 GameData.hasUserData(act, "cave.json")
             addView(TextView(act).apply {
                 text = if (edited) "※ へんしゅう ずみ" else "※ まだ へんしゅう していない"
@@ -260,6 +265,7 @@ class EditorScreens(
             .setMessage("へんしゅうした ないようを ぜんぶ すてて、\nはじめの ないように もどします。よろしいですか？")
             .setPositiveButton("もどす") { _, _ ->
                 GameData.resetToAssets(act, "stages.json")
+                GameData.resetToAssets(act, "school_stages.json")
                 GameData.resetToAssets(act, "cave.json")
                 onDataChanged()
                 toast("はじめの ないように もどしました")
@@ -294,6 +300,7 @@ class EditorScreens(
                     "birth" -> "👶 あかちゃん"
                     "job" -> "💼 しごと"
                     "shop" -> "🛒 おみせ"
+                    "exam" -> "🌸 じゅけん"
                     else -> o.optString("message", "").replace("\n", " ").take(24)
                 }
                 // 盤面と同じ配色にそろえる（緑=good 紫=bad ピンク=けっこん出産）
@@ -305,6 +312,7 @@ class EditorScreens(
                     kind == "wedding" || kind == "birth" -> Color.parseColor("#EC407A")
                     kind == "job" -> Color.parseColor("#00ACC1")
                     kind == "shop" -> Color.parseColor("#F9A825")
+                    kind == "exam" -> Color.parseColor("#E53935")
                     bad -> Color.parseColor("#7E57C2")
                     else -> Color.parseColor("#43A047")
                 }
