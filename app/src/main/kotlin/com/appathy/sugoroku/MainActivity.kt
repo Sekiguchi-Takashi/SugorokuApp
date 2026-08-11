@@ -48,6 +48,7 @@ class MainActivity : Activity() {
         var money: Int = 0,              // 所持金
         var jobId: String = "none",      // 就いている職業のid
         var passedExam: Boolean = false, // 受験に合格したか
+        var examTries: Int = 0,          // 受験に挑戦した回数（上限あり）
         var hasLover: Boolean = false,   // こくはくに成功したか
         val skills: MutableSet<String> = HashSet()   // 取得済みスキルのid
     ) {
@@ -111,6 +112,9 @@ class MainActivity : Activity() {
         const val SKILL_SCORE = 10           // スキル1つあたりのスコア
         const val MARRIED_SCORE = 30         // けっこんのスコア
         const val CHILD_SCORE = 50           // こどものスコア
+        const val EXAM_SCORE = 50            // 学校編: じゅけん ごうかくのスコア
+        const val LOVER_SCORE = 30           // 学校編: こいびとが できたスコア
+        const val EXAM_MAX_TRIES = 2         // 受験に挑戦できる回数
     }
 
     /**
@@ -191,6 +195,14 @@ class MainActivity : Activity() {
      *   ステータス合計 ＋ おかね/10 ＋ きゅうりょう/10 ＋ スキル数×10 ＋ かぞく
      */
     private fun scoreOf(p: Player): Int {
+        // 学校編は しごと・おかね・けっこん を使わないので、
+        // ステータスと ちょうせん の成果だけで採点する
+        if (mode == GameMode.SCHOOL) {
+            var s = p.total
+            if (p.passedExam) s += Skill.EXAM_SCORE
+            if (p.hasLover) s += Skill.LOVER_SCORE
+            return s
+        }
         var s = p.total + p.money / 10
         s += (jobOf(p.jobId)?.salary ?: 0) / 10
         s += p.skills.size * Skill.SKILL_SCORE
@@ -803,10 +815,11 @@ class MainActivity : Activity() {
         }
         infoRow.addView(TextView(this).apply {
             text = "ステージ${stageIndex + 1}/${stages.size}「${stage.name}」\n" +
-                "🟢いいこと 🟣わるいこと 🩵しごと 🟡おみせ\n" +
                 if (mode == GameMode.SCHOOL)
-                    "🔴じゅけん（${statNames[0]}しだい） 🩷こくはく（${statNames[2]}しだい）"
-                else "🟠ワープ 🩷けっこん・出産"
+                    "🟢いいこと 🟣わるいこと\n" +
+                        "🔴じゅけん（${statNames[0]}しだい） 🩷こくはく（${statNames[2]}しだい）"
+                else
+                    "🟢いいこと 🟣わるいこと 🩵しごと 🟡おみせ\n🟠ワープ 🩷けっこん・出産"
             textSize = 11f
             setTextColor(Color.parseColor("#558B2F"))
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
@@ -867,7 +880,8 @@ class MainActivity : Activity() {
             setTextColor(Color.WHITE)
             background = roundedBg(Color.parseColor("#EF6C00"))
             setPadding(dp(4), dp(8), dp(4), dp(8))
-            text = "🍖${statNames[0]}${Skill.MANPUKU_COST}→+${Skill.MANPUKU_BONUS}"
+            text = (if (mode == GameMode.SCHOOL) "📖" else "🍖") +
+                "${statNames[0]}${Skill.MANPUKU_COST}→+${Skill.MANPUKU_BONUS}"
             setOnClickListener { useManpukuSkill() }
         }
         skillRow.addView(manpukuSkillButton, LinearLayout.LayoutParams(
@@ -963,13 +977,20 @@ class MainActivity : Activity() {
         if (me.hasChild) bonus.append("　👶x${Skill.CHILD_MULTIPLIER}")
         else if (me.married) bonus.append("　💍x${Skill.MARRIED_MULTIPLIER}")
         if (me.yuujou >= Skill.YUUJOU_THRESHOLD) bonus.append("　🤝+${Skill.YUUJOU_BONUS}")
-        if (me.boostNext) bonus.append("　🍖+${Skill.MANPUKU_BONUS}")
+        if (me.boostNext) {
+            bonus.append((if (mode == GameMode.SCHOOL) "　📖+" else "　🍖+") + Skill.MANPUKU_BONUS)
+        }
         val sd = me.skills.sumOf { skillOf(it)?.dice ?: 0 }
         if (sd > 0) bonus.append("　💪+$sd")
         val tag = if (me.isHuman && players.count { it.isHuman } >= 2) "${me.humanNo}P " else ""
-        val job = jobOf(me.jobId)?.icon ?: ""
+        // 学校編は おかね・しごとを使わないので、そのぶん ごうかく・こいびとを出す
+        val extra = if (mode == GameMode.SCHOOL) {
+            (if (me.passedExam) "　🌸" else "") + (if (me.hasLover) "　💗" else "")
+        } else {
+            "　💰${me.money}${jobOf(me.jobId)?.icon ?: ""}"
+        }
         statsBar.text = "$tag${statNames[0]}${me.manpuku} ${statNames[1]}${me.juujitsu} " +
-            "${statNames[2]}${me.yuujou} 💰${me.money}$job$bonus"
+            "${statNames[2]}${me.yuujou}$extra$bonus"
     }
 
     private fun updateSkillButtons() {
@@ -990,13 +1011,21 @@ class MainActivity : Activity() {
             sb.append("  $where ${p.position} / ${Board.goal(p.inCave)}\n")
             sb.append("  ${statNames[0]} ${p.manpuku}　${statNames[1]} ${p.juujitsu}" +
                 "　${statNames[2]} ${p.yuujou}\n")
-            val j = jobOf(p.jobId)
-            sb.append("  おかね ${p.money}")
-            if (j != null) sb.append("　しごと ${j.icon}${j.name}（きゅうりょう ${j.salary}）")
-            sb.append("\n")
-            if (p.skills.isNotEmpty()) {
-                val names = p.skills.mapNotNull { skillOf(it) }.joinToString("、") { "${it.icon}${it.name}" }
-                sb.append("  スキル $names\n")
+            if (mode == GameMode.SCHOOL) {
+                val st = ArrayList<String>()
+                if (p.passedExam) st.add("🌸じゅけん ごうかく")
+                if (p.hasLover) st.add("💗こいびとが いる")
+                if (st.isNotEmpty()) sb.append("  ${st.joinToString("／")}\n")
+            } else {
+                val j = jobOf(p.jobId)
+                sb.append("  おかね ${p.money}")
+                if (j != null) sb.append("　しごと ${j.icon}${j.name}（きゅうりょう ${j.salary}）")
+                sb.append("\n")
+                if (p.skills.isNotEmpty()) {
+                    val names = p.skills.mapNotNull { skillOf(it) }
+                        .joinToString("、") { "${it.icon}${it.name}" }
+                    sb.append("  スキル $names\n")
+                }
             }
             val marks = ArrayList<String>()
             if (p.hasChild) marks.add("👶こども あり（イベント${Skill.CHILD_MULTIPLIER}倍）")
@@ -1019,7 +1048,8 @@ class MainActivity : Activity() {
         if (!p.isHuman || p.manpuku < Skill.MANPUKU_COST || p.boostNext) return
         p.manpuku -= Skill.MANPUKU_COST
         p.boostNext = true
-        statusText.text = "🍖 パワーアップ！ つぎのルーレットに +${Skill.MANPUKU_BONUS}"
+        statusText.text = (if (mode == GameMode.SCHOOL) "📖" else "🍖") +
+            " パワーアップ！ つぎのルーレットに +${Skill.MANPUKU_BONUS}"
         updateStatsBar()
         updateSkillButtons()
     }
@@ -1163,6 +1193,15 @@ class MainActivity : Activity() {
         startTurn()
     }
 
+    /**
+     * ゴール到達時に、まだ受けていないステージ内の「ちょうせん」を返す。
+     * 出目によってマスを飛び越しても受験を必ず通すための救済。
+     */
+    private fun pendingChallenge(p: Player): GameEvent? =
+        stage.events.values.firstOrNull {
+            it.kind == EventKind.EXAM && !p.passedExam && p.examTries < Skill.EXAM_MAX_TRIES
+        }
+
     /** そのイベントが今のプレイヤーに発生するか */
     private fun eventAvailable(p: Player, ev: GameEvent): Boolean = when (ev.kind) {
         EventKind.NORMAL -> true
@@ -1170,13 +1209,21 @@ class MainActivity : Activity() {
         EventKind.BIRTH -> p.married && !p.hasChild
         EventKind.JOB -> jobsData.jobs.size > 1        // 選べる職業があるときだけ
         EventKind.SHOP -> jobsData.skills.isNotEmpty() // 売るものがあるときだけ
-        EventKind.EXAM -> true
+        EventKind.EXAM -> !p.passedExam && p.examTries < Skill.EXAM_MAX_TRIES
         EventKind.LOVE -> !p.hasLover   // こいびとが いないときだけ
     }
 
     private fun onLanded(p: Player, fromEvent: Boolean) {
         if (p.position >= Board.goal(p.inCave)) {
-            if (p.inCave) exitCave(p) else stageClear(p)
+            if (p.inCave) {
+                exitCave(p)
+            } else {
+                // ゴール手前の「ちょうせん」は飛び越されやすいので、
+                // ゴールに着いた時点で未挑戦なら必ず受けさせる（受験のとりこぼし防止）
+                val pending = pendingChallenge(p)
+                if (pending != null && !fromEvent) showChallenge(p, pending)
+                else stageClear(p)
+            }
             return
         }
         // 分岐マス（本線のみ）: 洞窟ルートへ
@@ -1305,14 +1352,18 @@ class MainActivity : Activity() {
             .setMessage(
                 "${who(winner)} が 1ばんに ゴール！\n" +
                 "1ちゃくボーナス 充実+${Skill.CLEAR_BONUS}　友情+${Skill.CLEAR_BONUS}\n\n" +
-                "【 きゅうりょう 】\n$payLines\n" +
+                (if (mode == GameMode.SCHOOL) "" else "【 きゅうりょう 】\n$payLines\n") +
                 "つぎは「${next.name}」！\nみんなで すすもう。\n" +
-                "（ステータス・けっこん・こども・しごとは そのまま）"
+                (if (mode == GameMode.SCHOOL) "（ステータスは そのまま ひきつぐよ）"
+                 else "（ステータス・けっこん・こども・しごとは そのまま）")
             )
             .setCancelable(false)
             .setPositiveButton("つぎのステージへ") { _, _ ->
                 stageIndex++
-                players.forEach { it.position = 0; it.inCave = false; it.caveReturn = 0 }
+                players.forEach {
+                    it.position = 0; it.inCave = false; it.caveReturn = 0
+                    it.passedExam = false; it.examTries = 0   // 受験はステージごと
+                }
                 turn = players.indexOf(winner).coerceAtLeast(0)
                 applyStage()
                 showGame()
@@ -1323,24 +1374,37 @@ class MainActivity : Activity() {
     private fun showFinalResult(winner: Player) {
         val ranking = players.sortedByDescending { scoreOf(it) }
         val sb = StringBuilder()
-        sb.append("さいごに ゴールしたのは ${who(winner)}！\n\n" +
-            "【 スコア = ステータス + おかね÷10 + きゅうりょう÷10\n" +
-            "　　　　+ スキル×10 + かぞく 】\n")
+        sb.append("さいごに ゴールしたのは ${who(winner)}！\n\n")
+        // モードによってスコアの内訳がちがうので、説明も出し分ける
+        sb.append(
+            if (mode == GameMode.SCHOOL)
+                "【 スコア = ${statNames[0]} + ${statNames[1]} + ${statNames[2]}\n" +
+                    "　　　　+ ごうかく + こいびと 】\n"
+            else
+                "【 スコア = ステータス + おかね÷10 + きゅうりょう÷10\n" +
+                    "　　　　+ スキル×10 + かぞく 】\n"
+        )
         for ((i, p) in ranking.withIndex()) {
             val medal = when (i) { 0 -> "🥇"; 1 -> "🥈"; 2 -> "🥉"; else -> "　" }
-            val name = who(p)
-            val fam = when {
-                p.hasChild -> " 👶"
-                p.married -> " 💍"
-                else -> ""
+            val marks = StringBuilder()
+            if (mode == GameMode.SCHOOL) {
+                if (p.passedExam) marks.append(" 🌸")
+                if (p.hasLover) marks.append(" 💗")
+            } else {
+                if (p.hasChild) marks.append(" 👶") else if (p.married) marks.append(" 💍")
+                jobOf(p.jobId)?.let { marks.append(it.icon) }
             }
-            val j = jobOf(p.jobId)
-            sb.append("$medal $name$fam${j?.icon ?: ""}　${scoreOf(p)}てん\n")
+            sb.append("$medal ${who(p)}$marks　${scoreOf(p)}てん\n")
             sb.append("　　${statNames[0]}${p.manpuku} ${statNames[1]}${p.juujitsu}" +
-                " ${statNames[2]}${p.yuujou} 💰${p.money} 💪${p.skills.size}\n")
+                " ${statNames[2]}${p.yuujou}")
+            if (mode != GameMode.SCHOOL) {
+                sb.append(" 💰${p.money} 💪${p.skills.size}")
+            }
+            sb.append("\n")
         }
+        val title = if (mode == GameMode.SCHOOL) "🎓 そつぎょう おめでとう！" else "🏆 ぜんステージ クリア！"
         AlertDialog.Builder(this)
-            .setTitle("🏆 ぜんステージ クリア！")
+            .setTitle(title)
             .setMessage(sb.toString().trimEnd())
             .setCancelable(false)
             .setPositiveButton("もういちど") { _, _ ->
@@ -1349,7 +1413,7 @@ class MainActivity : Activity() {
                     it.boostNext = false; it.married = false; it.hasChild = false
                     it.inCave = false; it.caveReturn = 0
                     it.money = jobsData.startMoney; it.jobId = "none"; it.skills.clear()
-                    it.passedExam = false; it.hasLover = false
+                    it.passedExam = false; it.hasLover = false; it.examTries = 0
                 }
                 stageIndex = 0
                 turn = 0
@@ -1358,14 +1422,6 @@ class MainActivity : Activity() {
             }
             .setNegativeButton("タイトルへ") { _, _ -> showTitle() }
             .show()
-    }
-
-    /** 条件ボーナスの発動判定。condStat が 1〜3 のときだけ働く */
-    private fun meetsCond(p: Player, ev: GameEvent): Boolean = when (ev.condStat) {
-        1 -> p.manpuku >= ev.condMin
-        2 -> p.juujitsu >= ev.condMin
-        3 -> p.yuujou >= ev.condMin
-        else -> false
     }
 
     /** 家族が増えるほどプラスのステータス上昇が大きくなる（マイナスはそのまま） */
@@ -1596,6 +1652,7 @@ class MainActivity : Activity() {
      * 成功すると全ステータスが上がり、失敗すると少し戻ってやり直せる。
      */
     private fun showChallenge(p: Player, ev: GameEvent) {
+        if (ev.kind == EventKind.EXAM) p.examTries++
         val rate = successRate(p, ev)
         val passed = Random.nextInt(100) < rate
         val statName = statNames[(ev.challengeStat - 1).coerceIn(0, 2)]
@@ -1611,6 +1668,10 @@ class MainActivity : Activity() {
         })
         val msg = StringBuilder(ev.message)
         msg.append("\n\n$statName ${challengeValue(p, ev)} → せいこうりつ ${rate}%\n\n")
+        if (ev.kind == EventKind.EXAM) {
+            val left = Skill.EXAM_MAX_TRIES - p.examTries
+            if (!passed && left > 0) msg.append("（あと ${left}かい ちょうせんできる）\n")
+        }
         if (passed) {
             msg.append(ev.passMessage.ifBlank { "🌸 せいこう！ おめでとう！" })
             msg.append("\n${statNames[0]}・${statNames[1]}・${statNames[2]} が +${ev.passGain}")

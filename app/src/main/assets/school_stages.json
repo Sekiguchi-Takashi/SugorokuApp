@@ -14,13 +14,18 @@
       "juujitsu": 0,
       "yuujou": 0,
       "group": 1,
-      "move": 0
+      "move": 0,
+      "challengeStat": 1,
+      "baseRate": 0,
+      "passGain": 20,
+      "failLoss": 3,
+      "failMove": -3
     },
     "love": {
       "bg": "bg_sunset_class",
       "message": "ゆうぐれの きょうしつ。\nおもいきって こくはくする？",
       "challengeStat": 3,
-      "baseRate": 20,
+      "baseRate": 35,
       "passGain": 15,
       "failLoss": 5,
       "failMove": -2,
@@ -276,7 +281,9 @@
         },
         {
           "cell": 28,
-          "kind": "exam"
+          "kind": "exam",
+          "baseRate": 0,
+          "failMove": -3
         }
       ]
     },
@@ -473,6 +480,10 @@
           "move": 0
         },
         {
+          "cell": 21,
+          "kind": "love"
+        },
+        {
           "cell": 22,
           "bg": "bg_jukenbenkyo",
           "kind": "normal",
@@ -543,7 +554,9 @@
           "kind": "exam",
           "message": "こうこう じゅけんの ひ！",
           "passMessage": "🌸 こうこうに ごうかく！",
-          "failMessage": "😢 ふごうかく… もういちど！"
+          "failMessage": "😢 ふごうかく… もういちど！",
+          "baseRate": 0,
+          "failMove": -3
         }
       ]
     }
