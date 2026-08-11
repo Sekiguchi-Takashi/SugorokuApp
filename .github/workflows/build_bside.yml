@@ -1,4 +1,4 @@
-name: Build APK
+name: Build B-side APK
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-bside:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,10 +20,10 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Build debug APK
-        run: gradle :app:assembleDebug
+      - name: Build B-side debug APK
+        run: gradle :bside:assembleDebug
 
       - uses: actions/upload-artifact@v4
         with:
-          name: SugorokuApp-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: SugorokuApp-bside-debug-apk
+          path: bside/build/outputs/apk/debug/bside-debug.apk

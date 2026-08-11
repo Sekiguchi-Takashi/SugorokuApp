@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "name": "どうくつ",
+  "cellCount": 20,
+  "returnSkip": 20,
+  "bg": "bg_ground",
+  "events": []
+}

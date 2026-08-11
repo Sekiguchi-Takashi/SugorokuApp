@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "startMoney": 0,
+  "skills": [],
+  "jobs": [
+    {
+      "id": "none",
+      "name": "がくせい",
+      "icon": "🎒",
+      "salary": 0,
+      "requires": [],
+      "manpuku": 0,
+      "juujitsu": 0,
+      "yuujou": 0,
+      "desc": ""
+    }
+  ]
+}

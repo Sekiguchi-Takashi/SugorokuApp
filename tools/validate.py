@@ -15,9 +15,18 @@ import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ASSETS = os.path.join(ROOT, 'app', 'src', 'main', 'assets')
-DRAWABLE = os.path.join(ROOT, 'app', 'src', 'main', 'res', 'drawable')
-KOTLIN = os.path.join(ROOT, 'app', 'src', 'main', 'kotlin', 'com', 'appathy', 'sugoroku')
+
+# 検査対象の面を引数で切り替える（既定はA面）
+#   python3 tools/validate.py          → A面（:app）
+#   python3 tools/validate.py bside    → B面（:bside）
+SIDE = sys.argv[1] if len(sys.argv) > 1 else 'app'
+if SIDE == 'bside':
+    MODULE, PKG = 'bside', 'sugorokub'
+else:
+    MODULE, PKG = 'app', 'sugoroku'
+ASSETS = os.path.join(ROOT, MODULE, 'src', 'main', 'assets')
+DRAWABLE = os.path.join(ROOT, MODULE, 'src', 'main', 'res', 'drawable')
+KOTLIN = os.path.join(ROOT, MODULE, 'src', 'main', 'kotlin', 'com', 'appathy', PKG)
 
 errors = []
 warns = []
@@ -102,7 +111,7 @@ def check_stages(files, fname='stages.json'):
         if bad_kind:
             err('未知のkind: %s' % set(bad_kind))
         # 小学校版など、しごと・おみせを置かないモードもある
-        if fname == 'stages.json':
+        if fname == 'stages.json' and SIDE == 'app':
             if not job:
                 warn('しごとマスがありません')
             if not shop:
@@ -221,6 +230,8 @@ def check_cave(files, stages_doc):
         err('洞窟内でスタート(0)に戻る経路が %d 件' % len(zeros))
     else:
         ok('スタートに戻る経路なし（全開始位置×出目1〜10を総当たり）')
+    if not evs:
+        warn('洞窟のイベントが0件です（洞窟を使わない構成なら問題なし）')
     ok('イベント%d件 マス%d 復帰+%d' % (len(evs), n, skip))
 
 
@@ -445,9 +456,11 @@ def check_kotlin():
 
 def main():
     files = drawables()
+    print('検査対象: %s面（%s）' % ('B' if SIDE == 'bside' else 'A', MODULE))
     print('drawable: %d件' % len(files))
     doc = check_stages(files, 'stages.json')
-    check_stages(files, 'school_stages.json')
+    if os.path.exists(os.path.join(ASSETS, 'school_stages.json')):
+        check_stages(files, 'school_stages.json')
     check_cave(files, doc)
     check_jobs(files)
     sets = check_charas(files)

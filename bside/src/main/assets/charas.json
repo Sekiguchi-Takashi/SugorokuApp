@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "sets": {
+    "human": {
+      "label": "にんげん",
+      "charas": [
+        {
+          "name": "あかり",
+          "img": "chara_kid01"
+        },
+        {
+          "name": "みなみ",
+          "img": "chara_kid02"
+        },
+        {
+          "name": "そうた",
+          "img": "chara_kid03"
+        },
+        {
+          "name": "ひまり",
+          "img": "chara_kid04"
+        },
+        {
+          "name": "りく",
+          "img": "chara_kid05"
+        },
+        {
+          "name": "しおり",
+          "img": "chara_kid06"
+        },
+        {
+          "name": "はやと",
+          "img": "chara_kid07"
+        },
+        {
+          "name": "ゆい",
+          "img": "chara_kid08"
+        },
+        {
+          "name": "けんと",
+          "img": "chara_kid09"
+        },
+        {
+          "name": "たける",
+          "img": "chara_kid10"
+        },
+        {
+          "name": "あおい",
+          "img": "chara_kid11"
+        },
+        {
+          "name": "さくら",
+          "img": "chara_kid12"
+        }
+      ]
+    }
+  }
+}

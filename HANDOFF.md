@@ -3,7 +3,7 @@
 ## 概要
 どうぶつの森風の世界観のすごろくアプリ。プレイヤーはキャラ（しばいぬ・うさぎ・いのしし・トラ）を選び、ルーレット(1〜6)で30マスの盤面を進んでゴールを目指す。
 
-- 現在バージョン: **v5.4.1-A（v5.4-A のビルドエラー修正）**
+- 現在バージョン: **v5.5-A（B面モジュールを追加：1リポジトリ2アプリ）**
 - パッケージ: `com.appathy.sugoroku` / minSdk 26 / targetSdk 34
 
 ## ロードマップ
@@ -94,6 +94,47 @@ SugorokuApp/
 | 最終スコア | 中央251（30〜456） |
 
 `shared.exam.baseRate = 0` にしたので、**勉強の値がそのまま合格率(%)**になる分かりやすい設計。こくはくは `baseRate 35 + モテモテ`。
+
+## 🔀 A面 / B面 の構成（v5.5〜）
+
+**同一リポジトリ内の2モジュール。完全独立（コード複製）方式。**
+
+| | A面 `:app` | B面 `:bside` |
+|---|---|---|
+| パッケージ | `com.appathy.sugoroku` | `com.appathy.sugorokub` |
+| applicationId | `com.appathy.sugoroku` | `com.appathy.sugoroku.bside` |
+| アプリ名 | どうぶつすごろく | がっこうすごろく |
+| 内容 | つうじょう版＋学校編 | **学校編のみ** |
+| キャラ | どうぶつ8体 | **人間12人** |
+| 画像 | 117枚 | 51枚（必要なものだけ） |
+| ビルド | `gradle :app:assembleDebug` | `gradle :bside:assembleDebug` |
+
+### なぜ完全独立にしたか
+Kotlinを共有する方式（`srcDirs` でA面を参照）も検討したが、**A面を壊すとB面のビルドも落ちる**ため「干渉しない」という要件に合わなかった。コードを複製したので、**A面を何をしてもB面は絶対に変わらない**。
+
+### ⚠️ 二重管理の注意
+`MainActivity.kt` などが2セット存在する。**A面のバグ修正はB面へ手作業で反映する必要がある**。
+反映の手順:
+```
+cd ~/SugorokuApp
+sed 's/^package com\.appathy\.sugoroku$/package com.appathy.sugorokub/' \
+    app/src/main/kotlin/com/appathy/sugoroku/XXX.kt \
+    > bside/src/main/kotlin/com/appathy/sugorokub/XXX.kt
+```
+ただし **B面はモード選択画面を削除している**ので、`MainActivity.kt` を丸ごと上書きすると復活してしまう。B面固有の差分は以下の3点だけなので、上書き後に再適用すること。
+1. `GameMode` は `SCHOOL` のみ（`NORMAL` を削除）
+2. `mode` の初期値が `GameMode.SCHOOL`
+3. `showModeMenu()` を削除し、タイトルの「はじめる」→ `showCharaSelect()` 直行
+
+`mode == GameMode.SCHOOL` の分岐は常に真になるが、**A面との差分を増やさないためあえて残している**。
+
+### B面のassets
+- `stages.json` — A面の `school_stages.json` を持ち込み、`charaSet` を `human` に
+- `charas.json` — 人間12人（partner/child なし。本人画像にフォールバックする）
+- `jobs.json` / `cave.json` — 使わないが、読み込み警告を出さないため最小構成で配置
+
+### 検証
+`python3 tools/validate.py`（A面）/ `python3 tools/validate.py bside`（B面）で切り替わる。**両方とも通してから push すること。**
 
 ## ⚠️ A面 / B面の分岐（v5.3以降）
 
