@@ -35,12 +35,21 @@ CIは A面ワークフローと B面ワークフロー（artifact名 `SugorokuAp
 
 - ステータス4種：べんきょう / うんどう / にんき / おこづかい（初期 5 / 5 / 5 / 1000）
 - キャラ12人（`assets/charas_human.json` の `sets.human`）、2〜4人プレイ（人の数を選び残りはCPU）
-- マス種別：START / NORMAL / GOOD / BAD / WARP(move±) / REST(rest回休み) / CHOICE(2択) / CHALLENGE(ステータス判定) / GOAL
+- マス種別：START / NORMAL / GOOD / BAD / WARP(move±) / REST(rest回休み) / CHOICE(2択) / CRUSH(きになる人を選ぶ) / CHALLENGE(ステータス判定) / GOAL
+- キャラは2セット：`sets.human`＝プレイヤー6人（あかり・みなみ・さくら・はやと・けんと・たける）、`sets.partner`＝恋人候補6人（ひまり・しおり・ゆい・そうた・りく・あおい）
+- 恋人：30マス目のCRUSHで候補3人からランダム提示→選択（CPUはランダム）。34マス目のこくはく（にんき22以上）成功で恋人成立。`events_human.json` の該当セルに `"love": true` を付けたセルが成立判定を担う
 - CHALLENGE は5箇所：がくげいかい(にんき6) / たいかい(うんどう12) / こうこうじゅけん(べんきょう18) / こくはく(にんき22) / さいごのしけん(べんきょう34)
 - 全員ゴール後、得点 =(べ+う+に)×3 + おこづかい/200 で順位、最大ステータスでエンディング4種を分岐
 - 画面遷移：`showTitle()` → `showCountSelect()` → `showHumanSelect()` → `showCharaSelect(index)` → `startGame()` → `showResult()`
 - 描画：`BoardView`（空グラデ＋丘＋校舎のパララックス、ステージで配色変更、うねる一本道、ミニマップ、カメラlerp 0.18）／`RouletteView`（6分割・結果を先に抽選して角度決定・2.1秒Decelerate）
 - 全てCanvas描画。A面のような**写真イベント素材は未使用**
+
+## 紹介ムービーの規約（v1.3〜）
+- 置き場所：`bside/src/main/res/raw/intro_<NN>.mp4`（NN=プレイヤー番号 01〜06、`sets.human` の並び順）
+- **あるキャラだけ置けばよい。** 無ければ再生をスキップして次へ進む（`resources.getIdentifier` が 0 を返したら即 after()）
+- 仕様：H.264 baseline / yuv420p / AAC / 1280×720 / 10秒前後 / 2Mbps以下。`androidResources { noCompress += "mp4" }` を指定済み
+- 元動画のマゼンタ背景は ffmpeg の colorkey で差し替え済み（`colorkey=0xE30BE3:0.32:0.10,despill` → 背景画像に overlay → crf 26 で再エンコード。2.54MB → 1.10MB）
+- 6人ぶん揃えても約7MBなのでAPKサイズ・GitHubの制限とも問題なし
 
 ## ファイル
 ```
@@ -54,7 +63,8 @@ SugorokuApp/
         ├── AndroidManifest.xml
         ├── assets/charas_human.json / events_human.json
         ├── kotlin/com/appathy/sugoroku/human/MainActivity.kt   # 全ロジック1ファイル
-        └── res/drawable/chara_kid01..12.png（512px RGBA）+ ic_launcher.png
+        ├── res/drawable/chara_kid01..12.png / chara_jhs01..12.png（512px RGBA）+ ic_launcher.png
+        └── res/raw/intro_03.mp4（キャラ紹介ムービー）
 ```
 
 ## 落とし穴
@@ -67,6 +77,8 @@ SugorokuApp/
 |---|---|
 | v1.0 | B面モジュール新設。45マス3ステージ、12キャラ、2〜4人、選択肢・チャレンジ・ワープ・休み、結果とエンディング4種 |
 | v1.1 | 中学生画像12枚を追加（背景透過・512px）。ライフステージ別に駒画像が切り替わる仕組み（charas_human.json schemaVersion 2）。盤面を擬似3D化（奥行き・楕円タイル・接地影・奥から手前への描画順） |
+| v1.2 | 12人を **プレイヤー6人 + 恋人候補6人** に分離（schemaVersion 3、sets.human / sets.partner）。CRUSHマス（こうこうにゅうがく）で候補3人から「きになる人」を選び、こくはく成功で恋人成立。得点+15・結果画面と成績欄に表示 |
+| v1.3 | キャラ決定時の紹介ムービー再生（VideoView、res/raw/intro_NN.mp4、タップでスキップ・15秒で強制終了）。さくら（03）のみ収録 |
 
 ## ライフステージと画像の規約（v1.1〜）
 `stageKeys` = `baby / kinder / elem / jhs / high / univ / work / senior`（生後・幼稚園 → 老後）。
@@ -84,13 +96,14 @@ SugorokuApp/
 | A 全部一枚絵 | キャラ×ステージ×向き | 288 | 破綻。採用しない |
 | B 頭＋体の2パーツ | 頭=キャラ×向き（12×3=36）＋体=ステージ×体型2×向き（8×2×3=48） | **84** | 推奨。首の接合位置を固定すれば合成できる |
 | C 完全パーツ分割 | 顔・髪・服を別レイヤー＋色フィルタ | 約57 | 最小だが位置合わせが最難関 |
-| D キャラを6人に絞る | 案Bの半分 | **42** | 最大4人プレイなので6人でも足りる |
+| D キャラを6人に絞る | 案Bの半分 | **42** | **採用済み（v1.2）**。プレイヤー6人・残り6人は恋人候補 |
 
-推奨は **D+B**（キャラ6人・頭＋体の2パーツ）。年齢差は頭身比率（子どもは頭大きめ）で出し、老後の白髪は
+採用は **D**（プレイヤー6人）。次は **B**（頭＋体の2パーツ合成）。年齢差は頭身比率（子どもは頭大きめ）で出し、老後の白髪は
 実行時のカラーフィルタで作れるため画像を増やさずに済む。ただし合成はまだ未実装で、v1.1 は一枚絵方式。
 
 ## 次にやる候補
 1. ライフステージ7〜8段階への盤面拡張（現状3ステージ45マス。素材が揃った段階で60〜70マスへ）
+   - 恋人候補は「大学・社会人」以降で結婚ルートへ接続する想定（partner を保持済み）
 2. 頭＋体の2パーツ合成レンダラ（枚数削減の本命。首位置の基準を決めるのが先）
 3. 背面画像を使う盤面（道を奥へ折り返すレイアウト。`_b` が揃ってから）
 4. A面の写真イベント素材・図鑑・イベントエディタの仕組みをB面へ移植（A面ソース参照が必要）

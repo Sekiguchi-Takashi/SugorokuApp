@@ -17,9 +17,21 @@ events = json.load(open(os.path.join(ASSETS, "events_human.json"), encoding="utf
 
 # 2. drawable references
 imgs = {os.path.splitext(f)[0] for f in os.listdir(DRAWABLE)}
-for c in charas["sets"]["human"]["charas"]:
-    if c["img"] not in imgs:
-        errors.append("missing drawable: " + c["img"])
+for setname, st in charas["sets"].items():
+    for c in st["charas"]:
+        if c["img"] not in imgs:
+            errors.append("missing drawable: " + c["img"])
+        for k, v in c.get("images", {}).items():
+            if v not in imgs:
+                errors.append("missing stage drawable: %s (%s)" % (v, k))
+if len(charas["sets"].get("human", {}).get("charas", [])) < 2:
+    errors.append("player set needs at least 2 charas")
+love = [c for c in json.load(open(os.path.join(ASSETS, "events_human.json"), encoding="utf-8"))["cells"] if c.get("love")]
+if len(love) != 1:
+    warns.append("love cell count = %d" % len(love))
+crush = [c for c in json.load(open(os.path.join(ASSETS, "events_human.json"), encoding="utf-8"))["cells"] if c["type"] == "CRUSH"]
+if crush and love and crush[0]["i"] > love[0]["i"]:
+    errors.append("CRUSH cell must come before the love CHALLENGE")
 
 # 3. cell index continuity
 cells = events["cells"]
@@ -32,7 +44,7 @@ if cells[-1]["type"] != "GOAL":
     errors.append("last cell must be GOAL")
 
 # 4. type-specific required fields
-VALID = {"START", "GOAL", "NORMAL", "GOOD", "BAD", "WARP", "REST", "CHOICE", "CHALLENGE"}
+VALID = {"START", "GOAL", "NORMAL", "GOOD", "BAD", "WARP", "REST", "CHOICE", "CHALLENGE", "CRUSH"}
 for c in cells:
     if c["type"] not in VALID:
         errors.append("unknown type at %d: %s" % (c["i"], c["type"]))
@@ -86,5 +98,5 @@ for w in warns:
     print("WARN " + w)
 for e in errors:
     print("ERROR " + e)
-print("cells=%d charas=%d drawables=%d" % (len(cells), len(charas["sets"]["human"]["charas"]), len(imgs)))
+print("cells=%d players=%d partners=%d drawables=%d" % (len(cells), len(charas["sets"]["human"]["charas"]), len(charas["sets"].get("partner", {}).get("charas", [])), len(imgs)))
 sys.exit(1 if errors else 0)

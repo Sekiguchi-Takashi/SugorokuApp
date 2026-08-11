@@ -3,38 +3,32 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-/**
- * B面（学校編・人間キャラ）
- *
- * A面（:app）とは Gradle モジュールとして完全に独立している。
- * Kotlin・assets・res をすべて自前で持つので、A面をどう変更しても B面は影響を受けない。
- * そのぶん、A面のバグ修正は手作業で B面へ反映する必要がある。
- */
+val keystoreFile = listOf(
+    rootProject.file("debug.keystore"),
+    rootProject.file("app/debug.keystore"),
+    rootProject.file("bside/debug.keystore")
+).firstOrNull { it.exists() }
+
 android {
-    namespace = "com.appathy.sugorokub"
+    namespace = "com.appathy.sugoroku.human"
     compileSdk = 34
 
     defaultConfig {
-        // A面と同時にインストールできるよう applicationId を分ける
-        applicationId = "com.appathy.sugoroku.bside"
+        applicationId = "com.appathy.sugoroku.human"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0-B"
+        versionCode = 4
+        versionName = "1.3"
     }
 
-    signingConfigs {
-        getByName("debug") {
-            storeFile = rootProject.file("debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
-    }
-
-    buildTypes {
-        getByName("debug") {
-            signingConfig = signingConfigs.getByName("debug")
+    if (keystoreFile != null) {
+        signingConfigs {
+            getByName("debug") {
+                storeFile = keystoreFile
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
         }
     }
 
@@ -42,11 +36,18 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
     kotlinOptions {
         jvmTarget = "17"
     }
-}
 
-dependencies {
-    // 外部依存ゼロ（規約）
+    androidResources {
+        noCompress += "mp4"
+    }
+
+    sourceSets {
+        getByName("main") {
+            java.srcDirs("src/main/kotlin")
+        }
+    }
 }
