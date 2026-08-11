@@ -1424,6 +1424,17 @@ class MainActivity : Activity() {
             .show()
     }
 
+    /**
+     * 条件ボーナスの発動判定。condStat が 1〜3 のときだけ働く。
+     * 例: 運動(2)が25以上なら モテモテ+8。
+     */
+    private fun meetsCond(p: Player, ev: GameEvent): Boolean = when (ev.condStat) {
+        1 -> p.manpuku >= ev.condMin
+        2 -> p.juujitsu >= ev.condMin
+        3 -> p.yuujou >= ev.condMin
+        else -> false
+    }
+
     /** 家族が増えるほどプラスのステータス上昇が大きくなる（マイナスはそのまま） */
     private fun gain(p: Player, delta: Int): Int {
         if (delta <= 0) return delta
