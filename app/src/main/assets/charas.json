@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "sets": {
+    "animal": {
+      "label": "どうぶつ",
+      "charas": [
+        {
+          "name": "しばいぬ",
+          "img": "chara_shiba",
+          "partner": "chara_shiba_f",
+          "child": "child_shiba"
+        },
+        {
+          "name": "うさぎ",
+          "img": "chara_usagi",
+          "partner": "chara_usagi_f",
+          "child": "child_usagi"
+        },
+        {
+          "name": "いのしし",
+          "img": "chara_inoshishi",
+          "partner": "chara_inoshishi_f",
+          "child": "child_inoshishi"
+        },
+        {
+          "name": "トラ",
+          "img": "chara_tora",
+          "partner": "chara_tora_f",
+          "child": "child_tora"
+        },
+        {
+          "name": "ペンギン",
+          "img": "chara_penguin",
+          "partner": "chara_penguin_f",
+          "child": "child_penguin"
+        },
+        {
+          "name": "ネズミ",
+          "img": "chara_nezumi",
+          "partner": "chara_nezumi_f",
+          "child": "child_nezumi"
+        },
+        {
+          "name": "ツル",
+          "img": "chara_tsuru",
+          "partner": "chara_tsuru_f",
+          "child": "child_tsuru"
+        },
+        {
+          "name": "カエル",
+          "img": "chara_kaeru",
+          "partner": "chara_kaeru_f",
+          "child": "child_kaeru"
+        }
+      ]
+    }
+  }
+}

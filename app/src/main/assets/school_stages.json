@@ -15,6 +15,19 @@
       "yuujou": 0,
       "group": 1,
       "move": 0
+    },
+    "love": {
+      "bg": "bg_sunset_class",
+      "message": "ゆうぐれの きょうしつ。\nおもいきって こくはくする？",
+      "challengeStat": 3,
+      "baseRate": 20,
+      "passGain": 15,
+      "failLoss": 5,
+      "failMove": -2,
+      "passMessage": "💗 こころが つうじた！",
+      "failMessage": "💔 ともだちのままに なった…",
+      "group": 1,
+      "move": 0
     }
   },
   "stages": [
@@ -266,6 +279,274 @@
           "kind": "exam"
         }
       ]
+    },
+    {
+      "name": "ちゅうがっこう",
+      "bg": "bg_bukatsu",
+      "branchCell": -1,
+      "events": [
+        {
+          "cell": 1,
+          "bg": "bg_sakura_school",
+          "kind": "normal",
+          "message": "さくらの みちを あるいて にゅうがく。\n運動+5　モテモテ+5",
+          "manpuku": 0,
+          "juujitsu": 5,
+          "yuujou": 5,
+          "group": 3,
+          "move": 0
+        },
+        {
+          "cell": 2,
+          "bg": "bg_item_blazer",
+          "kind": "normal",
+          "message": "あたらしい せいふくを きた。\nモテモテ+10",
+          "manpuku": 0,
+          "juujitsu": 0,
+          "yuujou": 10,
+          "group": 1,
+          "move": 0
+        },
+        {
+          "cell": 3,
+          "bg": "bg_jhs_classroom",
+          "kind": "normal",
+          "message": "すうがくの じゅぎょう。\n勉強+12",
+          "manpuku": 12,
+          "juujitsu": 0,
+          "yuujou": 0,
+          "group": 1,
+          "move": 0
+        },
+        {
+          "cell": 5,
+          "bg": "bg_jhs_hallway",
+          "kind": "normal",
+          "message": "ろうかで ともだちと はなした。\nモテモテ+8",
+          "manpuku": 0,
+          "juujitsu": 0,
+          "yuujou": 8,
+          "group": 3,
+          "move": 0
+        },
+        {
+          "cell": 6,
+          "bg": "bg_bushitsu",
+          "kind": "normal",
+          "message": "ぶかつに にゅうぶした！\n運動+12",
+          "manpuku": 0,
+          "juujitsu": 12,
+          "yuujou": 0,
+          "group": 3,
+          "move": 0
+        },
+        {
+          "cell": 7,
+          "bg": "bg_item_taisofuku",
+          "kind": "normal",
+          "message": "たいそうふくを わすれた…。\nモテモテ-8",
+          "manpuku": 0,
+          "juujitsu": 0,
+          "yuujou": -8,
+          "group": 1,
+          "move": 0
+        },
+        {
+          "cell": 9,
+          "bg": "bg_bukatsu",
+          "kind": "normal",
+          "message": "ぶかつの れんしゅう。\n運動+15　勉強-5",
+          "manpuku": -5,
+          "juujitsu": 15,
+          "yuujou": 0,
+          "group": 4,
+          "move": 0
+        },
+        {
+          "cell": 10,
+          "bg": "bg_ongakushitsu",
+          "kind": "normal",
+          "message": "がっしょうコンクールの れんしゅう。\n勉強+5　モテモテ+10",
+          "manpuku": 5,
+          "juujitsu": 0,
+          "yuujou": 10,
+          "group": 4,
+          "move": 0
+        },
+        {
+          "cell": 11,
+          "bg": "bg_item_racket",
+          "kind": "normal",
+          "message": "しあいで かった！\n運動+12",
+          "manpuku": 0,
+          "juujitsu": 12,
+          "yuujou": 0,
+          "group": 2,
+          "move": 0,
+          "condStat": 2,
+          "condMin": 40,
+          "condBonus1": 0,
+          "condBonus2": 8,
+          "condBonus3": 8,
+          "condMessage": "運動が たかいので レギュラーに なった！"
+        },
+        {
+          "cell": 12,
+          "bg": "bg_taiikusai",
+          "kind": "normal",
+          "message": "たいいくさいで かつやくした。\n運動+15　モテモテ+10",
+          "manpuku": 0,
+          "juujitsu": 15,
+          "yuujou": 10,
+          "group": 4,
+          "move": 0,
+          "condStat": 2,
+          "condMin": 35,
+          "condBonus1": 0,
+          "condBonus2": 0,
+          "condBonus3": 10,
+          "condMessage": "運動が たかいので さらに モテモテ+10！"
+        },
+        {
+          "cell": 13,
+          "bg": "bg_bijutsushitsu",
+          "kind": "normal",
+          "message": "びじゅつの さくひんが にゅうせん。\n勉強+8　モテモテ+8",
+          "manpuku": 8,
+          "juujitsu": 0,
+          "yuujou": 8,
+          "group": 2,
+          "move": 0
+        },
+        {
+          "cell": 14,
+          "bg": "bg_getabako_gift",
+          "kind": "normal",
+          "message": "くつばこに プレゼントが！\nモテモテ+15",
+          "manpuku": 0,
+          "juujitsu": 0,
+          "yuujou": 15,
+          "group": 1,
+          "move": 0,
+          "condStat": 3,
+          "condMin": 40,
+          "condBonus1": 0,
+          "condBonus2": 0,
+          "condBonus3": 10,
+          "condMessage": "モテモテが たかいので さらに +10！"
+        },
+        {
+          "cell": 16,
+          "kind": "love"
+        },
+        {
+          "cell": 17,
+          "bg": "bg_kyoto",
+          "kind": "normal",
+          "message": "しゅうがくりょこうで きょうとへ。\n勉強+10　モテモテ+12",
+          "manpuku": 10,
+          "juujitsu": 0,
+          "yuujou": 12,
+          "group": 4,
+          "move": 0
+        },
+        {
+          "cell": 19,
+          "bg": "bg_jhs_classroom",
+          "kind": "normal",
+          "message": "テストの てんが わるかった…。\n勉強-10",
+          "manpuku": -10,
+          "juujitsu": 0,
+          "yuujou": 0,
+          "group": 1,
+          "move": 0
+        },
+        {
+          "cell": 20,
+          "bg": "bg_juku",
+          "kind": "normal",
+          "message": "じゅくの じしゅうしつで べんきょう。\n勉強+15　運動-5",
+          "manpuku": 15,
+          "juujitsu": -5,
+          "yuujou": 0,
+          "group": 1,
+          "move": 0
+        },
+        {
+          "cell": 22,
+          "bg": "bg_jukenbenkyo",
+          "kind": "normal",
+          "message": "としょかんで じゅけんべんきょう。\n勉強+18",
+          "manpuku": 18,
+          "juujitsu": 0,
+          "yuujou": 0,
+          "group": 1,
+          "move": 0
+        },
+        {
+          "cell": 23,
+          "bg": "bg_jhs_hallway",
+          "kind": "normal",
+          "message": "ろうかを はしって しかられた…。\nモテモテ-5　2マス もどる",
+          "manpuku": 0,
+          "juujitsu": 0,
+          "yuujou": -5,
+          "group": 1,
+          "move": -2
+        },
+        {
+          "cell": 24,
+          "bg": "bg_juku",
+          "kind": "normal",
+          "message": "よふかしで ねぶそく…。\n運動-10",
+          "manpuku": 0,
+          "juujitsu": -10,
+          "yuujou": 0,
+          "group": 1,
+          "move": 0
+        },
+        {
+          "cell": 25,
+          "bg": "bg_jukenbenkyo",
+          "kind": "normal",
+          "message": "さいごの おいこみ。\n勉強+15",
+          "manpuku": 15,
+          "juujitsu": 0,
+          "yuujou": 0,
+          "group": 1,
+          "move": 0
+        },
+        {
+          "cell": 26,
+          "bg": "bg_item_shosho",
+          "kind": "normal",
+          "message": "そつぎょうしょうしょを うけとった。\n勉強+5　モテモテ+5",
+          "manpuku": 5,
+          "juujitsu": 0,
+          "yuujou": 5,
+          "group": 1,
+          "move": 0
+        },
+        {
+          "cell": 27,
+          "bg": "bg_sotsugyo",
+          "kind": "normal",
+          "message": "そつぎょうしきで なみだ。\nモテモテ+10　運動+5",
+          "manpuku": 0,
+          "juujitsu": 5,
+          "yuujou": 10,
+          "group": 4,
+          "move": 0
+        },
+        {
+          "cell": 28,
+          "kind": "exam",
+          "message": "こうこう じゅけんの ひ！",
+          "passMessage": "🌸 こうこうに ごうかく！",
+          "failMessage": "😢 ふごうかく… もういちど！"
+        }
+      ]
     }
-  ]
+  ],
+  "charaSet": "animal"
 }

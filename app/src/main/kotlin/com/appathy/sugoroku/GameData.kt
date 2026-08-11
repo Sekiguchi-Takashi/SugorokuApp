@@ -48,6 +48,8 @@ object GameData {
         val mainCellCount: Int,
         /** ステータス3種の表示名。モードごとに変わる */
         val statNames: List<String>,
+        /** 使用するキャラクターセットのキー */
+        val charaSet: String,
         val warnings: List<String>
     ) {
         val ok: Boolean get() = warnings.isEmpty()
@@ -112,6 +114,7 @@ object GameData {
         "job" -> MainActivity.EventKind.JOB
         "shop" -> MainActivity.EventKind.SHOP
         "exam" -> MainActivity.EventKind.EXAM
+        "love" -> MainActivity.EventKind.LOVE
         else -> MainActivity.EventKind.NORMAL
     }
 
@@ -132,6 +135,7 @@ object GameData {
             MainActivity.EventKind.JOB -> shared?.optJSONObject("job")
             MainActivity.EventKind.SHOP -> shared?.optJSONObject("shop")
             MainActivity.EventKind.EXAM -> shared?.optJSONObject("exam")
+            MainActivity.EventKind.LOVE -> shared?.optJSONObject("love")
             else -> null
         }
         fun str(key: String, def: String): String =
@@ -153,7 +157,15 @@ object GameData {
             condBonus1 = num("condBonus1", 0),
             condBonus2 = num("condBonus2", 0),
             condBonus3 = num("condBonus3", 0),
-            condMessage = str("condMessage", "")
+            condMessage = str("condMessage", ""),
+            // ちょうせん（受験・こくはく）のパラメータ
+            challengeStat = num("challengeStat", if (kind == MainActivity.EventKind.LOVE) 3 else 1),
+            baseRate = num("baseRate", if (kind == MainActivity.EventKind.LOVE) 20 else 30),
+            passGain = num("passGain", 20),
+            failLoss = num("failLoss", 3),
+            failMove = num("failMove", -2),
+            passMessage = str("passMessage", ""),
+            failMessage = str("failMessage", "")
         )
     }
 
@@ -207,13 +219,13 @@ object GameData {
         val warnings = ArrayList<String>()
         val raw = readJson(context, fileName)
             ?: return StagesResult(emptyList(), MainActivity.Board.MAIN_COUNT, DEFAULT_STATS,
-                arrayListOf("$fileName を読み込めませんでした"))
+                "animal", arrayListOf("$fileName を読み込めませんでした"))
 
         val root = try {
             JSONObject(raw)
         } catch (e: Exception) {
             return StagesResult(emptyList(), MainActivity.Board.MAIN_COUNT, DEFAULT_STATS,
-                arrayListOf("$fileName のJSON構文が不正です: ${e.message}"))
+                "animal", arrayListOf("$fileName のJSON構文が不正です: ${e.message}"))
         }
 
         // ステータス名（省略時はつうじょう版の名前）
@@ -263,7 +275,8 @@ object GameData {
             }
         }
         if (list.isEmpty()) warnings.add("$fileName: 有効なステージが1つもありません")
-        return StagesResult(list, cellCount, statNames, warnings)
+        return StagesResult(list, cellCount, statNames,
+            root.optString("charaSet", "animal"), warnings)
     }
 
     /**
@@ -314,6 +327,44 @@ object GameData {
         )
 
         return LoadResult(BoardData(name, cellCount, boardBg, events, returnSkip), warnings)
+    }
+
+    // ---------------- キャラクター（v5.2）----------------
+
+    /**
+     * assets/charas.json からキャラクターのセットを読み込む。
+     * partner/child は結婚・出産のあるモードでのみ使う。
+     * 学校モードのように1枚しか無いキャラは、partner/child が本人画像にフォールバックする。
+     */
+    fun loadCharas(context: Context, setKey: String): List<MainActivity.Chara> {
+        val raw = readJson(context, "charas.json") ?: return emptyList()
+        return try {
+            val sets = JSONObject(raw).optJSONObject("sets") ?: return emptyList()
+            val set = sets.optJSONObject(setKey) ?: return emptyList()
+            val arr = set.optJSONArray("charas") ?: return emptyList()
+            val out = ArrayList<MainActivity.Chara>()
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                val img = o.optString("img", "")
+                if (img.isBlank()) continue
+                val self = drawableId(context, img)
+                // partner/child が無いモードでは本人画像で代用する（表示が欠けないように）
+                val partner = o.optString("partner", "").ifBlank { img }
+                val child = o.optString("child", "").ifBlank { img }
+                out.add(
+                    MainActivity.Chara(
+                        name = o.optString("name", "キャラ${i + 1}"),
+                        resId = self,
+                        partnerRes = drawableId(context, partner),
+                        childRes = drawableId(context, child)
+                    )
+                )
+            }
+            out
+        } catch (e: Exception) {
+            Log.e(TAG, "charas.json の解析に失敗", e)
+            emptyList()
+        }
     }
 
     // ---------------- 職業・スキル（v4.2）----------------

@@ -59,7 +59,7 @@ def check_stages(files, fname='stages.json'):
     for st in d.get('stages', []):
         for e in st.get('events', []):
             used_kinds.add(e.get('kind', 'normal'))
-    for k in ('wedding', 'birth', 'job', 'shop', 'exam'):
+    for k in ('wedding', 'birth', 'job', 'shop', 'exam', 'love'):
         if k not in used_kinds:
             continue
         if k not in shared:
@@ -97,7 +97,7 @@ def check_stages(files, fname='stages.json'):
             warn('わるいイベント(%d)がいいイベント(%d)より多い' % (len(bad_ev), len(good_ev)))
         if net <= 0:
             err('通常イベントの合計が %+d。ステータスが伸びずゲームが成立しません' % net)
-        known = {'normal', 'wedding', 'birth', 'job', 'shop', 'exam'}
+        known = {'normal', 'wedding', 'birth', 'job', 'shop', 'exam', 'love'}
         bad_kind = [e.get('kind') for e in evs if e.get('kind', 'normal') not in known]
         if bad_kind:
             err('未知のkind: %s' % set(bad_kind))
@@ -122,6 +122,11 @@ def check_stages(files, fname='stages.json'):
             if not (1 <= b <= 9):
                 err('branchCell %d は 1〜9 にすること（+returnSkip が盤外になる）' % b)
         exam = [e['cell'] for e in evs if e.get('kind') == 'exam']
+        love = [e['cell'] for e in evs if e.get('kind') == 'love']
+        # ちょうせん系は最後のほうに置かないとステータスが育たない
+        for c in exam:
+            if c < n * 0.7:
+                warn('じゅけんマス %d が早すぎます（%d以降を推奨）' % (c, int(n * 0.7)))
         if wed or bir:
             if len(wed) != 2:
                 err('結婚マスが %d 個（2個にすること）' % len(wed))
@@ -147,9 +152,9 @@ def check_stages(files, fname='stages.json'):
                 err('cell %d の group は 1〜4' % e['cell'])
         if st.get('bg') not in files:
             err('盤面背景 %s がありません' % st.get('bg'))
-        ok('イベント%d件 (🟢%d 🟣%d 💒%d 👶%d 💼%d 🛒%d 🌸%d) 移動あり%d 合計%+d あな%s'
+        ok('イベント%d件 (🟢%d 🟣%d 💒%d 👶%d 💼%d 🛒%d 🌸%d 💗%d) 移動あり%d 合計%+d あな%s'
            % (len(evs), len(good_ev), len(bad_ev), len(wed), len(bir), len(job), len(shop),
-              len(exam), len(mv), net, 'なし' if b == -1 else str(b)))
+              len(exam), len(love), len(mv), net, 'なし' if b == -1 else str(b)))
     return d
 
 
@@ -267,6 +272,60 @@ def check_jobs(files):
        % (len(skills), len(jobs), start, len(free)))
 
 
+def check_charas(files):
+    print('\n=== charas.json ===')
+    path = os.path.join(ASSETS, 'charas.json')
+    try:
+        d = json.load(open(path, encoding='utf-8'))
+    except Exception as e:
+        err('JSONとして読めません: %s' % e)
+        return {}
+    sets = d.get('sets', {})
+    if not sets:
+        err('sets が空です')
+    for key, st in sets.items():
+        chars = st.get('charas', [])
+        names = [c.get('name') for c in chars]
+        if len(names) != len(set(names)):
+            err('%s: 名前が重複' % key)
+        for c in chars:
+            for field in ('img', 'partner', 'child'):
+                v = c.get(field)
+                if v and v not in files:
+                    err('%s の %s に指定された画像 %s がありません' % (c.get('name'), field, v))
+        # 結婚・出産のあるモードで使うなら partner/child が要る
+        full = [c for c in chars if c.get('partner') and c.get('child')]
+        ok('%s: %d体（partner/child あり %d体）' % (key, len(chars), len(full)))
+    return sets
+
+
+def check_charaset_link(sets):
+    print('\n=== モードとキャラセットの対応 ===')
+    for fname in ('stages.json', 'school_stages.json'):
+        path = os.path.join(ASSETS, fname)
+        try:
+            d = json.load(open(path, encoding='utf-8'))
+        except Exception:
+            continue
+        key = d.get('charaSet', 'animal')
+        if key not in sets:
+            err('%s の charaSet=%s が charas.json にありません' % (fname, key))
+            continue
+        chars = sets[key].get('charas', [])
+        # 結婚・出産マスを置くモードは partner/child が必須
+        kinds = set()
+        for st in d.get('stages', []):
+            for e in st.get('events', []):
+                kinds.add(e.get('kind', 'normal'))
+        need_family = bool(kinds & {'wedding', 'birth'})
+        missing = [c['name'] for c in chars
+                   if need_family and not (c.get('partner') and c.get('child'))]
+        if missing:
+            err('%s は結婚/出産があるのに partner/child が無いキャラ: %s' % (fname, missing))
+        ok('%s → %s（%d体・家族画像%s）'
+           % (fname, key, len(chars), '必要' if need_family else '不要'))
+
+
 def check_kotlin():
     print('\n=== Kotlin ===')
     for fn in ('MainActivity.kt', 'GameData.kt', 'EditorScreens.kt', 'Zukan.kt'):
@@ -292,6 +351,8 @@ def main():
     check_stages(files, 'school_stages.json')
     check_cave(files, doc)
     check_jobs(files)
+    sets = check_charas(files)
+    check_charaset_link(sets)
     check_kotlin()
 
     print('\n' + '=' * 40)

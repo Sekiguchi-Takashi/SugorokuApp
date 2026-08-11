@@ -167,6 +167,7 @@ class EditorScreens(
                     MainActivity.EventKind.JOB -> "💼 "
                     MainActivity.EventKind.SHOP -> "🛒 "
                     MainActivity.EventKind.EXAM -> "🌸 "
+                    MainActivity.EventKind.LOVE -> "💗 "
                     else -> ""
                 }
                 col.addView(TextView(act).apply {
@@ -301,6 +302,7 @@ class EditorScreens(
                     "job" -> "💼 しごと"
                     "shop" -> "🛒 おみせ"
                     "exam" -> "🌸 じゅけん"
+                    "love" -> "💗 こくはく"
                     else -> o.optString("message", "").replace("\n", " ").take(24)
                 }
                 // 盤面と同じ配色にそろえる（緑=good 紫=bad ピンク=けっこん出産）
@@ -313,6 +315,7 @@ class EditorScreens(
                     kind == "job" -> Color.parseColor("#00ACC1")
                     kind == "shop" -> Color.parseColor("#F9A825")
                     kind == "exam" -> Color.parseColor("#E53935")
+                    kind == "love" -> Color.parseColor("#EC407A")
                     bad -> Color.parseColor("#7E57C2")
                     else -> Color.parseColor("#43A047")
                 }
