@@ -47,7 +47,7 @@ class MainActivity : Activity() {
 
     // ---------------- データ定義 ----------------
 
-    class Chara(val name: String, val img: String, val resId: Int)
+    class Chara(val name: String, val img: String, val images: HashMap<String, String>)
 
     class Delta(val st: Int, val sp: Int, val pp: Int, val mn: Int)
 
@@ -65,7 +65,7 @@ class MainActivity : Activity() {
         val choices: List<Choice>, val ch: Challenge?
     )
 
-    class Stage(val name: String, val from: Int, val to: Int)
+    class Stage(val key: String, val name: String, val from: Int, val to: Int)
 
     class Ending(val key: String, val title: String, val text: String)
 
@@ -106,6 +106,56 @@ class MainActivity : Activity() {
     private fun dp(v: Float): Float = v * resources.displayMetrics.density
     private fun dpi(v: Float): Int = dp(v).toInt()
 
+    // ---------------- ライフステージ別の画像解決 ----------------
+    // images に無いステージは近いステージへフォールバック。
+    // suffix は "_s"(側面) / "_b"(背面) など。存在しなければ suffix なしへ落ちる。
+
+    private val stageKeys = listOf("baby", "kinder", "elem", "jhs", "high", "univ", "work", "senior")
+    private val resCache = HashMap<String, Int>()
+
+    private fun stageKeyAt(pos: Int): String {
+        var i = 0
+        while (i < stages.size) {
+            val s = stages[i]
+            if (pos >= s.from && pos <= s.to) return s.key
+            i++
+        }
+        if (stages.isEmpty()) return "elem"
+        return stages[stages.size - 1].key
+    }
+
+    private fun imageBaseFor(c: Chara, stageKey: String): String {
+        var idx = stageKeys.indexOf(stageKey)
+        if (idx < 0) idx = stageKeys.size - 1
+        var i = idx
+        while (i >= 0) {
+            val b = c.images[stageKeys[i]]
+            if (b != null) return b
+            i--
+        }
+        i = idx + 1
+        while (i < stageKeys.size) {
+            val b = c.images[stageKeys[i]]
+            if (b != null) return b
+            i++
+        }
+        return c.img
+    }
+
+    private fun resOf(base: String, suffix: String): Int {
+        val key = base + suffix
+        val hit = resCache[key]
+        if (hit != null) return hit
+        var id = resources.getIdentifier(key, "drawable", packageName)
+        if (id == 0) id = resources.getIdentifier(base, "drawable", packageName)
+        resCache[key] = id
+        return id
+    }
+
+    private fun charaRes(c: Chara, stageKey: String, suffix: String): Int {
+        return resOf(imageBaseFor(c, stageKey), suffix)
+    }
+
     // ---------------- 起動 ----------------
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -135,8 +185,18 @@ class MainActivity : Activity() {
         while (i < arr.length()) {
             val o = arr.getJSONObject(i)
             val img = o.getString("img")
-            val rid = resources.getIdentifier(img, "drawable", packageName)
-            if (rid != 0) cl.add(Chara(o.getString("name"), img, rid))
+            val map = HashMap<String, String>()
+            val io = o.optJSONObject("images")
+            if (io != null) {
+                val ks = io.keys()
+                while (ks.hasNext()) {
+                    val k = ks.next()
+                    map[k] = io.getString(k)
+                }
+            }
+            if (resources.getIdentifier(img, "drawable", packageName) != 0) {
+                cl.add(Chara(o.getString("name"), img, map))
+            }
             i++
         }
         charas = cl
@@ -148,7 +208,7 @@ class MainActivity : Activity() {
         i = 0
         while (i < sarr.length()) {
             val o = sarr.getJSONObject(i)
-            sl.add(Stage(o.getString("name"), o.getInt("from"), o.getInt("to")))
+            sl.add(Stage(o.optString("key", "elem"), o.getString("name"), o.getInt("from"), o.getInt("to")))
             i++
         }
         stages = sl
@@ -257,7 +317,7 @@ class MainActivity : Activity() {
         var i = 0
         while (i < 4 && i < charas.size) {
             val iv = ImageView(this)
-            iv.setImageResource(charas[i].resId)
+            iv.setImageResource(charaRes(charas[i], stageKeyAt(0), ""))
             val lp = LinearLayout.LayoutParams(dpi(64f), dpi(64f))
             lp.leftMargin = dpi(4f)
             lp.rightMargin = dpi(4f)
@@ -346,7 +406,7 @@ class MainActivity : Activity() {
             item.gravity = Gravity.CENTER
             item.setPadding(dpi(6f), dpi(8f), dpi(6f), dpi(8f))
             val iv = ImageView(this)
-            iv.setImageResource(c.resId)
+            iv.setImageResource(charaRes(c, stageKeyAt(0), ""))
             iv.layoutParams = LinearLayout.LayoutParams(dpi(84f), dpi(84f))
             item.addView(iv)
             item.addView(label(c.name, 14f, Color.parseColor("#3A3A3A")))
@@ -739,7 +799,7 @@ class MainActivity : Activity() {
             box.setPadding(dpi(8f), dpi(10f), dpi(8f), dpi(10f))
 
             val iv = ImageView(this)
-            iv.setImageResource(p.chara.resId)
+            iv.setImageResource(charaRes(p.chara, stageKeyAt(cells.size - 1), ""))
             iv.layoutParams = LinearLayout.LayoutParams(dpi(72f), dpi(72f))
             box.addView(iv)
 
@@ -785,9 +845,32 @@ class MainActivity : Activity() {
         private var targetX = 0f
         private var inited = false
 
-        private fun cellW(): Float = dp(112f)
+        private fun cellW(): Float = dp(88f)
         private fun cellX(i: Int): Float = dp(60f) + i * cellW()
-        private fun cellY(i: Int): Float = height * 0.46f + sin(i * 0.62f) * dp(34f)
+        // 奥行き（0.56=奥 〜 1.0=手前）。道が奥へ入って手前へ戻る擬似3D
+        private fun depth(i: Int): Float = 0.82f + 0.18f * sin(i * 0.40f)
+        private fun cellY(i: Int): Float = height * 0.60f - (1f - depth(i)) * dp(70f)
+        private fun tileRx(i: Int): Float = dp(26f) * depth(i)
+        private fun tileRy(i: Int): Float = dp(26f) * depth(i) * 0.45f
+
+        private fun drawPiece(canvas: Canvas, pl: Player, index: Int) {
+            val d = depth(pl.pos)
+            val cx = cellX(pl.pos) + (index - (players.size - 1) / 2f) * dp(20f) * d
+            val cy = cellY(pl.pos) + tileRy(pl.pos) * 0.35f
+            val size = dp(58f) * d
+            p.color = Color.parseColor("#40000000")
+            canvas.drawOval(RectF(cx - size * 0.26f, cy - size * 0.08f, cx + size * 0.26f, cy + size * 0.08f), p)
+            if (index == turn) {
+                p.color = Color.parseColor("#FFE08A")
+                canvas.drawOval(RectF(cx - size * 0.34f, cy - size * 0.11f, cx + size * 0.34f, cy + size * 0.11f), p)
+            }
+            val rid = charaRes(pl.chara, stageKeyAt(pl.pos), "_s")
+            if (rid != 0) {
+                val b = bmp(rid)
+                val dst = RectF(cx - size / 2f, cy - size, cx + size / 2f, cy)
+                canvas.drawBitmap(b, Rect(0, 0, b.width, b.height), dst, null)
+            }
+        }
 
         fun focus(pos: Int) {
             targetX = cellX(pos) - width / 2f
@@ -866,7 +949,7 @@ class MainActivity : Activity() {
             val far = camX * 0.25f
             var hx = -(far % dp(220f))
             while (hx < width + dp(220f)) {
-                canvas.drawCircle(hx + dp(110f), height * 0.62f, dp(120f), p)
+                canvas.drawCircle(hx + dp(110f), height * 0.42f, dp(120f), p)
                 hx += dp(220f)
             }
 
@@ -875,11 +958,11 @@ class MainActivity : Activity() {
             val mid = camX * 0.5f
             var bx = -(mid % dp(320f))
             while (bx < width + dp(320f)) {
-                val top = height * 0.36f
-                canvas.drawRect(bx + dp(40f), top, bx + dp(200f), height * 0.66f, p)
+                val top = height * 0.14f
+                canvas.drawRect(bx + dp(40f), top, bx + dp(200f), height * 0.44f, p)
                 p.color = Color.parseColor("#C9BCA8")
                 var wy = top + dp(14f)
-                while (wy < height * 0.6f) {
+                while (wy < height * 0.40f) {
                     var wx = bx + dp(52f)
                     while (wx < bx + dp(190f)) {
                         canvas.drawRect(wx, wy, wx + dp(16f), wy + dp(14f), p)
@@ -893,62 +976,73 @@ class MainActivity : Activity() {
 
             // 地面
             p.color = groundC
-            canvas.drawRect(0f, height * 0.66f, width.toFloat(), height.toFloat(), p)
+            canvas.drawRect(0f, height * 0.44f, width.toFloat(), height.toFloat(), p)
 
             canvas.save()
             canvas.translate(-camX, 0f)
 
-            // 道
-            p.color = Color.parseColor("#F0E4CF")
-            p.strokeWidth = dp(46f)
-            p.strokeCap = Paint.Cap.ROUND
+            // 道（奥行きのある帯）
+            p.style = Paint.Style.FILL
+            val road = Path()
             var i = 0
-            while (i < cells.size - 1) {
-                canvas.drawLine(cellX(i), cellY(i), cellX(i + 1), cellY(i + 1), p)
+            while (i < cells.size) {
+                val x = cellX(i)
+                val y = cellY(i) - tileRy(i) * 2.4f
+                if (i == 0) road.moveTo(x - dp(60f), y) else road.lineTo(x, y)
                 i++
             }
+            i = cells.size - 1
+            while (i >= 0) {
+                road.lineTo(cellX(i), cellY(i) + tileRy(i) * 2.4f)
+                i--
+            }
+            road.close()
+            p.color = Color.parseColor("#EFE2CB")
+            canvas.drawPath(road, p)
 
-            // マス
+            // 奥のマスから手前のマスへ順に描く（重なりが自然になる）
+            val order = ArrayList<Int>()
             i = 0
             while (i < cells.size) {
-                val cx = cellX(i)
-                val cy = cellY(i)
-                if (cx > camX - dp(160f) && cx < camX + width + dp(160f)) {
-                    val c = cells[i]
-                    p.color = Color.parseColor("#7A6A56")
-                    canvas.drawCircle(cx, cy, dp(29f), p)
-                    p.color = cellColor(c.type)
-                    canvas.drawCircle(cx, cy, dp(26f), p)
-
-                    p.color = Color.parseColor("#4A3F35")
-                    p.textSize = dp(13f)
-                    p.textAlign = Paint.Align.CENTER
-                    canvas.drawText((i + 1).toString(), cx, cy + dp(5f), p)
-
-                    p.textSize = dp(11f)
-                    p.color = Color.parseColor("#3E3A34")
-                    val ttl = if (c.title.length > 7) c.title.substring(0, 7) else c.title
-                    canvas.drawText(ttl, cx, cy + dp(46f), p)
-                    p.textAlign = Paint.Align.LEFT
-                }
+                order.add(i)
                 i++
             }
+            order.sortBy { depth(it) }
 
-            // 駒
-            i = 0
-            while (i < players.size) {
-                val pl = players[i]
-                val cx = cellX(pl.pos) + (i - (players.size - 1) / 2f) * dp(22f)
-                val cy = cellY(pl.pos) - dp(30f)
-                val b = bmp(pl.chara.resId)
-                val size = dp(54f)
-                val dst = RectF(cx - size / 2f, cy - size, cx + size / 2f, cy)
-                if (i == turn) {
-                    p.color = Color.parseColor("#FFE08A")
-                    canvas.drawCircle(cx, cy - size / 2f, size * 0.62f, p)
+            var oi = 0
+            while (oi < order.size) {
+                val ci = order[oi]
+                val cx = cellX(ci)
+                val cy = cellY(ci)
+                if (cx > camX - dp(200f) && cx < camX + width + dp(200f)) {
+                    val c = cells[ci]
+                    val rx = tileRx(ci)
+                    val ry = tileRy(ci)
+                    val d = depth(ci)
+                    p.color = Color.parseColor("#26000000")
+                    canvas.drawOval(RectF(cx - rx, cy - ry + dp(3f), cx + rx, cy + ry + dp(3f)), p)
+                    p.color = Color.parseColor("#7A6A56")
+                    canvas.drawOval(RectF(cx - rx, cy - ry, cx + rx, cy + ry), p)
+                    p.color = cellColor(c.type)
+                    canvas.drawOval(RectF(cx - rx * 0.88f, cy - ry * 0.82f, cx + rx * 0.88f, cy + ry * 0.82f), p)
+
+                    p.textAlign = Paint.Align.CENTER
+                    p.color = Color.parseColor("#4A3F35")
+                    p.textSize = dp(12f) * d
+                    canvas.drawText((ci + 1).toString(), cx, cy + dp(4f) * d, p)
+                    p.textSize = dp(11f) * d
+                    p.color = Color.parseColor("#3E3A34")
+                    val ttl = if (c.title.length > 7) c.title.substring(0, 7) else c.title
+                    canvas.drawText(ttl, cx, cy + ry + dp(16f) * d, p)
+                    p.textAlign = Paint.Align.LEFT
+
+                    var pi = 0
+                    while (pi < players.size) {
+                        if (players[pi].pos == ci) drawPiece(canvas, players[pi], pi)
+                        pi++
+                    }
                 }
-                canvas.drawBitmap(b, Rect(0, 0, b.width, b.height), dst, null)
-                i++
+                oi++
             }
 
             canvas.restore()

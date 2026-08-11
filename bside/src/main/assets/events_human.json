@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "statNames": { "st": "べんきょう", "sp": "うんどう", "pp": "にんき", "mn": "おこづかい" },
   "stages": [
-    { "name": "しょうがっこう", "from": 0, "to": 14 },
-    { "name": "ちゅうがっこう", "from": 15, "to": 29 },
-    { "name": "こうこう", "from": 30, "to": 44 }
+    { "key": "elem", "name": "しょうがっこう", "from": 0, "to": 14 },
+    { "key": "jhs", "name": "ちゅうがっこう", "from": 15, "to": 29 },
+    { "key": "high", "name": "こうこう", "from": 30, "to": 44 }
   ],
   "cells": [
     { "i": 0, "type": "START", "title": "にゅうがく", "text": "しょうがっこうに にゅうがく！ ここからスタート。" },
