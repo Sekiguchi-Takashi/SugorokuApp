@@ -164,6 +164,9 @@ class MainActivity : Activity() {
         return resOf(imageBaseFor(c, stageKey), suffix)
     }
 
+    // タイトルとキャラ選択で見せる姿（盤面の先頭＝あかちゃんではなく高校生を出す）
+    private fun previewStageKey(): String = "high"
+
     // ---------------- 起動 ----------------
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -334,7 +337,7 @@ class MainActivity : Activity() {
         var i = 0
         while (i < 4 && i < charas.size) {
             val iv = ImageView(this)
-            iv.setImageResource(charaRes(charas[i], stageKeyAt(0), ""))
+            iv.setImageResource(charaRes(charas[i], previewStageKey(), ""))
             val lp = LinearLayout.LayoutParams(dpi(64f), dpi(64f))
             lp.leftMargin = dpi(4f)
             lp.rightMargin = dpi(4f)
@@ -344,7 +347,7 @@ class MainActivity : Activity() {
         }
         root.addView(row)
 
-        root.addView(bigButton("はじめる") { showCountSelect() })
+        root.addView(bigButton("はじめる") { showModeSelect() })
         root.addView(bigButton("あそびかた") { showHelp() })
         setContentView(root)
     }
@@ -359,39 +362,32 @@ class MainActivity : Activity() {
             .setPositiveButton("とじる", null).show()
     }
 
-    // ---------------- 人数選択 ----------------
+    // ---------------- あそびかた選択（1画面）----------------
 
-    private fun showCountSelect() {
-        val root = column()
-        root.setBackgroundColor(Color.parseColor("#FFF6E5"))
-        root.gravity = Gravity.CENTER
-        root.addView(label("なんにんで あそぶ？", 24f, Color.parseColor("#3A5A40")))
-        root.addView(bigButton("2にん") { totalCount = 2; showHumanSelect() })
-        root.addView(bigButton("3にん") { totalCount = 3; showHumanSelect() })
-        root.addView(bigButton("4にん") { totalCount = 4; showHumanSelect() })
-        root.addView(bigButton("もどる") { showTitle() })
-        setContentView(root)
+    private fun modeButton(labelText: String, total: Int, humans: Int): Button {
+        return bigButton(labelText) {
+            totalCount = total
+            humanCount = humans
+            picked.clear()
+            players = ArrayList()
+            showCharaSelect(0)
+        }
     }
 
-    private fun showHumanSelect() {
+    private fun showModeSelect() {
+        val sv = ScrollView(this)
         val root = column()
         root.setBackgroundColor(Color.parseColor("#FFF6E5"))
-        root.gravity = Gravity.CENTER
-        root.addView(label("そのうち 人が あそぶのは？", 22f, Color.parseColor("#3A5A40")))
-        root.addView(label("のこりは CPU が うごきます", 14f, Color.parseColor("#6B705C")))
-        var n = 1
-        while (n <= totalCount) {
-            val v = n
-            root.addView(bigButton(v.toString() + "にん") {
-                humanCount = v
-                picked.clear()
-                players = ArrayList()
-                showCharaSelect(0)
-            })
-            n++
-        }
-        root.addView(bigButton("もどる") { showCountSelect() })
-        setContentView(root)
+        root.addView(label("あそびかたを えらぼう", 24f, Color.parseColor("#3A5A40")))
+        root.addView(label("えらぶと キャラせんたくに すすみます", 13f, Color.parseColor("#6B705C")))
+        root.addView(modeButton("ひとり ＋ CPU 1にん", 2, 1))
+        root.addView(modeButton("ひとり ＋ CPU 2にん", 3, 1))
+        root.addView(modeButton("ひとり ＋ CPU 3にん", 4, 1))
+        root.addView(modeButton("ふたりで あそぶ", 2, 2))
+        root.addView(modeButton("ふたり ＋ CPU 2にん", 4, 2))
+        root.addView(bigButton("タイトルへ") { showTitle() })
+        sv.addView(root)
+        setContentView(sv)
     }
 
     // ---------------- 紹介ムービー ----------------
@@ -457,6 +453,16 @@ class MainActivity : Activity() {
     // ---------------- キャラ選択 ----------------
 
     private fun showCharaSelect(index: Int) {
+        if (charas.isEmpty()) {
+            AlertDialog.Builder(this)
+                .setTitle("キャラが よみこめません")
+                .setMessage("charas_human.json と drawable を かくにんして ください。")
+                .setPositiveButton("OK") { _, _ -> showTitle() }
+                .show()
+            return
+        }
+        if (humanCount > charas.size) humanCount = charas.size
+        if (totalCount > charas.size) totalCount = charas.size
         if (index >= humanCount) {
             fillCpu()
             startGame()
@@ -483,7 +489,7 @@ class MainActivity : Activity() {
             item.gravity = Gravity.CENTER
             item.setPadding(dpi(6f), dpi(8f), dpi(6f), dpi(8f))
             val iv = ImageView(this)
-            iv.setImageResource(charaRes(c, stageKeyAt(0), ""))
+            iv.setImageResource(charaRes(c, previewStageKey(), ""))
             iv.layoutParams = LinearLayout.LayoutParams(dpi(84f), dpi(84f))
             item.addView(iv)
             item.addView(label(c.name, 14f, Color.parseColor("#3A3A3A")))
@@ -499,7 +505,7 @@ class MainActivity : Activity() {
             row!!.addView(item)
             i++
         }
-        root.addView(bigButton("さいしょから") { showTitle() })
+        root.addView(bigButton("もどる") { showModeSelect() })
         sv.addView(root)
         setContentView(sv)
     }
@@ -1024,11 +1030,7 @@ class MainActivity : Activity() {
             rank++
         }
 
-        root.addView(bigButton("もういちど") {
-            picked.clear()
-            players = ArrayList()
-            showCharaSelect(0)
-        })
+        root.addView(bigButton("もういちど") { showModeSelect() })
         root.addView(bigButton("タイトルへ") { showTitle() })
         sv.addView(root)
         setContentView(sv)
