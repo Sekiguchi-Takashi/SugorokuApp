@@ -94,12 +94,21 @@ def check_stages(files, fname='stages.json'):
         job = [e['cell'] for e in evs if e.get('kind') == 'job']
         shop = [e['cell'] for e in evs if e.get('kind') == 'shop']
         nrm = [e for e in evs if e.get('kind', 'normal') == 'normal']
+        def stat_sum(e):
+            return e.get('manpuku', 0) + e.get('juujitsu', 0) + e.get('yuujou', 0)
         def is_bad(e):
-            return (e.get('manpuku', 0) + e.get('juujitsu', 0) + e.get('yuujou', 0) < 0
-                    or e.get('move', 0) < 0)
-        bad_ev = [e for e in nrm if is_bad(e)]
-        good_ev = [e for e in nrm if not is_bad(e)]
-        net = sum(e.get('manpuku', 0) + e.get('juujitsu', 0) + e.get('yuujou', 0) for e in nrm)
+            return stat_sum(e) < 0 or e.get('move', 0) < 0
+        cho_ev = [e for e in nrm if e.get('choices')]
+        rest_ev = [e for e in nrm if not e.get('choices') and e.get('skip')]
+        plain = [e for e in nrm if not e.get('choices') and not e.get('skip')]
+        bad_ev = [e for e in plain if is_bad(e)]
+        good_ev = [e for e in plain if not is_bad(e)]
+        # 選択肢マスは どれを選ぶか分からないので、平均で見積もる
+        def choice_avg(e):
+            cs = e.get('choices') or []
+            return sum(stat_sum(c) for c in cs) / len(cs) if cs else 0
+        net = int(sum(stat_sum(e) for e in plain + rest_ev)
+                  + sum(choice_avg(e) for e in cho_ev))
         if not bad_ev:
             warn('わるいイベントがありません（起伏が出ません）')
         if len(bad_ev) > len(good_ev):
@@ -116,7 +125,38 @@ def check_stages(files, fname='stages.json'):
                 warn('しごとマスがありません')
             if not shop:
                 warn('おみせマスがありません')
-        mv = [e for e in nrm if e.get('move', 0) != 0]
+        mv = [e for e in nrm
+              if e.get('move', 0) != 0
+              or any(c.get('move', 0) != 0 for c in (e.get('choices') or []))]
+        # 選択肢イベント（choices）
+        for e in cho_ev:
+            cs = e['choices']
+            if not (2 <= len(cs) <= 4):
+                err('cell %d の choices は 2〜4件（今 %d件）' % (e['cell'], len(cs)))
+            if stat_sum(e) or e.get('move', 0):
+                err('cell %d は choices があるので 本体に効果を書かない' % e['cell'])
+            for c in cs:
+                if not str(c.get('label', '')).strip():
+                    err('cell %d の choices に label がありません' % e['cell'])
+                if not str(c.get('message', '')).strip():
+                    err('cell %d の「%s」に message がありません'
+                        % (e['cell'], c.get('label', '?')))
+                if 'bg' in c and c['bg'] not in files:
+                    err('cell %d の「%s」の画像 %s がありません'
+                        % (e['cell'], c.get('label', '?'), c['bg']))
+                if not (-10 <= c.get('move', 0) <= 10):
+                    err('cell %d の「%s」の move は -10〜10' % (e['cell'], c.get('label', '?')))
+            # 合計が同じでも 内訳（どのステータスが伸びるか）が違えば えらぶ意味がある
+            shapes = {(c.get('manpuku', 0), c.get('juujitsu', 0), c.get('yuujou', 0),
+                       c.get('move', 0), bool(c.get('skip'))) for c in cs}
+            if len(shapes) == 1:
+                warn('cell %d の選択肢は どれも同じ結果です（えらぶ意味がありません）' % e['cell'])
+        # 1回休み（skip）
+        for e in rest_ev:
+            if e.get('move', 0):
+                warn('cell %d は おやすみ と 移動 が重なっています（きつすぎ）' % e['cell'])
+        if len(rest_ev) > 3:
+            warn('おやすみマスが %d 個は多すぎます（3個までを推奨）' % len(rest_ev))
         b = st.get('branchCell', -1)
 
         if len(cells) != len(set(cells)):
@@ -161,8 +201,9 @@ def check_stages(files, fname='stages.json'):
                 err('cell %d の group は 1〜4' % e['cell'])
         if st.get('bg') not in files:
             err('盤面背景 %s がありません' % st.get('bg'))
-        ok('イベント%d件 (🟢%d 🟣%d 💒%d 👶%d 💼%d 🛒%d 🌸%d 💗%d) 移動あり%d 合計%+d あな%s'
-           % (len(evs), len(good_ev), len(bad_ev), len(wed), len(bir), len(job), len(shop),
+        ok('イベント%d件 (🟢%d 🟣%d 🔵%d 💤%d 💒%d 👶%d 💼%d 🛒%d 🌸%d 💗%d) 移動あり%d 合計%+d あな%s'
+           % (len(evs), len(good_ev), len(bad_ev), len(cho_ev), len(rest_ev),
+              len(wed), len(bir), len(job), len(shop),
               len(exam), len(love), len(mv), net, 'なし' if b == -1 else str(b)))
     return d
 

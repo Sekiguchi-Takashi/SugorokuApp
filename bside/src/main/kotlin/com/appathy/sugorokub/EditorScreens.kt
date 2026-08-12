@@ -303,14 +303,24 @@ class EditorScreens(
                     "shop" -> "🛒 おみせ"
                     "exam" -> "🌸 じゅけん"
                     "love" -> "💗 こくはく"
-                    else -> o.optString("message", "").replace("\n", " ").take(24)
+                    else -> {
+                        val head = when {
+                            o.optJSONArray("choices") != null -> "❓ "
+                            o.optBoolean("skip", false) -> "💤 "
+                            else -> ""
+                        }
+                        head + o.optString("message", "").replace("\n", " ").take(22)
+                    }
                 }
+                val hasChoices = o.optJSONArray("choices") != null
                 // 盤面と同じ配色にそろえる（緑=good 紫=bad ピンク=けっこん出産）
                 val bad = kind == "normal" && (
                     o.optInt("manpuku") + o.optInt("juujitsu") + o.optInt("yuujou") < 0 ||
                         o.optInt("move") < 0
                     )
                 val color = when {
+                    hasChoices -> Color.parseColor("#1E88E5")
+                    kind == "normal" && o.optBoolean("skip", false) -> Color.parseColor("#78909C")
                     kind == "wedding" || kind == "birth" -> Color.parseColor("#EC407A")
                     kind == "job" -> Color.parseColor("#00ACC1")
                     kind == "shop" -> Color.parseColor("#F9A825")
@@ -321,7 +331,8 @@ class EditorScreens(
                 }
                 addView(
                     listButton("${cell}マスめ", mark, color) {
-                        if (kind == "normal") showEventEdit(file, stageIndex, i, title)
+                        if (kind == "normal" && !hasChoices) showEventEdit(file, stageIndex, i, title)
+                        else if (hasChoices) toast("えらぶ マスは かえられません")
                         else toast("とくべつな マスは かえられません")
                     },
                     LinearLayout.LayoutParams(

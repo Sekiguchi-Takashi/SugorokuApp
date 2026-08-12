@@ -103,6 +103,28 @@
           "move": 0
         },
         {
+          "cell": 7,
+          "bg": "bg_ground",
+          "kind": "normal",
+          "message": "ほうかご だ！\nどうする？",
+          "group": 3,
+          "choices": [
+            {
+              "label": "こうていで あそぶ",
+              "bg": "bg_ground",
+              "message": "みんなで かけまわった！\n運動+12　モテモテ+6",
+              "juujitsu": 12,
+              "yuujou": 6
+            },
+            {
+              "label": "としょしつで べんきょう",
+              "bg": "bg_toshoshitsu",
+              "message": "しずかに べんきょうした。\n勉強+18",
+              "manpuku": 18
+            }
+          ]
+        },
+        {
           "cell": 8,
           "bg": "bg_toshoshitsu",
           "kind": "normal",
@@ -206,6 +228,18 @@
           "yuujou": -5,
           "group": 1,
           "move": 0
+        },
+        {
+          "cell": 19,
+          "bg": "bg_hokenshitsu",
+          "kind": "normal",
+          "message": "ねつが でて はやびけ した…。\n勉強-5",
+          "manpuku": -5,
+          "juujitsu": 0,
+          "yuujou": 0,
+          "move": 0,
+          "group": 1,
+          "skip": true
         },
         {
           "cell": 20,
@@ -326,6 +360,28 @@
           "move": 0
         },
         {
+          "cell": 4,
+          "bg": "bg_bukatsu",
+          "kind": "normal",
+          "message": "きょうは ぶかつと じゅくが かさなった。\nどっちに 行く？",
+          "group": 2,
+          "choices": [
+            {
+              "label": "ぶかつを がんばる",
+              "bg": "bg_bukatsu",
+              "message": "れんしゅうで あせを かいた！\n運動+16　モテモテ+5",
+              "juujitsu": 16,
+              "yuujou": 5
+            },
+            {
+              "label": "じゅくへ 行く",
+              "bg": "bg_juku",
+              "message": "むずかしい もんだいが とけた。\n勉強+20",
+              "manpuku": 20
+            }
+          ]
+        },
+        {
           "cell": 5,
           "bg": "bg_jhs_hallway",
           "kind": "normal",
@@ -441,6 +497,18 @@
           "condBonus2": 0,
           "condBonus3": 10,
           "condMessage": "モテモテが たかいので さらに +10！"
+        },
+        {
+          "cell": 15,
+          "bg": "bg_hokenshitsu",
+          "kind": "normal",
+          "message": "かぜで がっこうを やすんだ…。\n勉強-6",
+          "manpuku": -6,
+          "juujitsu": 0,
+          "yuujou": 0,
+          "move": 0,
+          "group": 1,
+          "skip": true
         },
         {
           "cell": 16,

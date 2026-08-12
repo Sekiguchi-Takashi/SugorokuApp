@@ -50,12 +50,28 @@ class MainActivity : Activity() {
         var passedExam: Boolean = false, // 受験に合格したか
         var examTries: Int = 0,          // 受験に挑戦した回数（上限あり）
         var hasLover: Boolean = false,   // こくはくに成功したか
+        var skipNext: Boolean = false,   // つぎの じぶんの番を1回休む
         val skills: MutableSet<String> = HashSet()   // 取得済みスキルのid
     ) {
         val total: Int get() = manpuku + juujitsu + yuujou
     }
 
     enum class EventKind { NORMAL, WEDDING, BIRTH, JOB, SHOP, EXAM, LOVE }
+
+    /**
+     * 選択肢イベントの えらびかた1つ分。
+     * えらぶと この効果だけが起きる。bgRes が 0 なら親イベントの写真を使う。
+     */
+    data class Choice(
+        val label: String,
+        val message: String,
+        val bgRes: Int = 0,
+        val dManpuku: Int = 0,
+        val dJuujitsu: Int = 0,
+        val dYuujou: Int = 0,
+        val dMove: Int = 0,
+        val skipTurn: Boolean = false
+    )
 
     data class GameEvent(
         val bgRes: Int,
@@ -87,7 +103,11 @@ class MainActivity : Activity() {
         val failLoss: Int = 3,
         val failMove: Int = -2,
         val passMessage: String = "",
-        val failMessage: String = ""
+        val failMessage: String = "",
+        /** true なら このイベントのあと つぎの じぶんの番を1回休む */
+        val skipTurn: Boolean = false,
+        /** 空でなければ選択肢イベント。えらんだものの効果だけが起きる */
+        val choices: List<Choice> = emptyList()
     )
 
     /** 1ステージ分の盤面定義 */
@@ -183,8 +203,16 @@ class MainActivity : Activity() {
      * ステータスの合計がマイナス、または もどる ならbadとして紫で示す。
      */
     private fun isBad(ev: GameEvent): Boolean =
-        ev.kind == EventKind.NORMAL &&
+        ev.kind == EventKind.NORMAL && ev.choices.isEmpty() && !ev.skipTurn &&
             (ev.dManpuku + ev.dJuujitsu + ev.dYuujou < 0 || ev.dMove < 0)
+
+    /** 1回休みマス（選択肢マスは えらんだ結果しだいなので ふくめない） */
+    private fun isRest(ev: GameEvent): Boolean =
+        ev.kind == EventKind.NORMAL && ev.choices.isEmpty() && ev.skipTurn
+
+    /** 選択肢マス */
+    private fun isChoice(ev: GameEvent): Boolean =
+        ev.kind == EventKind.NORMAL && ev.choices.isNotEmpty()
 
     private fun jobOf(id: String): GameData.JobDef? = jobsData.jobs.firstOrNull { it.id == id }
     private fun skillOf(id: String): GameData.SkillDef? = jobsData.skills.firstOrNull { it.id == id }
@@ -306,6 +334,10 @@ class MainActivity : Activity() {
         Board.loveCells = stage.events.filterValues { it.kind == EventKind.LOVE }.keys
         Board.badCells = stage.events.filterValues { isBad(it) }.keys
         Board.caveBadCells = caveEvents.filterValues { isBad(it) }.keys
+        Board.restCells = stage.events.filterValues { isRest(it) }.keys
+        Board.caveRestCells = caveEvents.filterValues { isRest(it) }.keys
+        Board.choiceCells = stage.events.filterValues { isChoice(it) }.keys
+        Board.caveChoiceCells = caveEvents.filterValues { isChoice(it) }.keys
         Board.branchCell = stage.branchCell
         Board.caveEventCells = caveEvents.keys
     }
@@ -762,10 +794,10 @@ class MainActivity : Activity() {
         infoRow.addView(TextView(this).apply {
             text = "ステージ${stageIndex + 1}/${stages.size}「${stage.name}」\n" +
                 if (mode == GameMode.SCHOOL)
-                    "🟢いいこと 🟣わるいこと\n" +
+                    "🟢いいこと 🟣わるいこと 🔵えらぶ ⚪おやすみ\n" +
                         "🔴じゅけん（${statNames[0]}しだい） 🩷こくはく（${statNames[2]}しだい）"
                 else
-                    "🟢いいこと 🟣わるいこと 🩵しごと 🟡おみせ\n🟠ワープ 🩷けっこん・出産"
+                    "🟢いいこと 🟣わるいこと 🔵えらぶ ⚪おやすみ\n🩵しごと 🟡おみせ 🟠ワープ 🩷けっこん・出産"
             textSize = 11f
             setTextColor(Color.parseColor("#558B2F"))
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
@@ -1060,6 +1092,20 @@ class MainActivity : Activity() {
 
     private fun startTurn() {
         val p = players[turn]
+        // 1回休み: フラグを消して この手番は とばす（全員が休んでも消えるので止まらない）
+        if (p.skipNext) {
+            p.skipNext = false
+            boardView.turnIndex = turn
+            boardView.world = p.inCave
+            boardView.snapToCell(p.position)
+            statusText.text = "💤 ${who(p)} は おやすみ…"
+            rouletteView.locked = true
+            startButton.isEnabled = false
+            boardView.panEnabled = false
+            updateSkillButtons()
+            handler.postDelayed({ nextTurn() }, Speed.eventWaitMs)
+            return
+        }
         val worldChanged = boardView.world != p.inCave
         boardView.turnIndex = turn
         boardView.world = p.inCave
@@ -1308,6 +1354,7 @@ class MainActivity : Activity() {
                 stageIndex++
                 players.forEach {
                     it.position = 0; it.inCave = false; it.caveReturn = 0
+                    it.skipNext = false
                     it.passedExam = false; it.examTries = 0   // 受験はステージごと
                 }
                 turn = players.indexOf(winner).coerceAtLeast(0)
@@ -1357,7 +1404,7 @@ class MainActivity : Activity() {
                 players.forEach {
                     it.position = 0; it.manpuku = 0; it.juujitsu = 0; it.yuujou = 0
                     it.boostNext = false; it.married = false; it.hasChild = false
-                    it.inCave = false; it.caveReturn = 0
+                    it.inCave = false; it.caveReturn = 0; it.skipNext = false
                     it.money = jobsData.startMoney; it.jobId = "none"; it.skills.clear()
                     it.passedExam = false; it.hasLover = false; it.examTries = 0
                 }
@@ -1679,14 +1726,101 @@ class MainActivity : Activity() {
     }
 
     // ---------------- イベント表示（汎用） ----------------
-    private fun showEvent(p: Player, ev: GameEvent) {
+
+    /**
+     * イベントの結果をステータスへ反映して手番を進める。
+     * 通常イベントと選択肢イベントの共通処理。
+     */
+    private fun applyOutcome(
+        p: Player, d1: Int, d2: Int, d3: Int, dMove: Int, skip: Boolean, kind: EventKind
+    ) {
+        p.manpuku = (p.manpuku + gain(p, d1)).coerceIn(0, 999)
+        p.juujitsu = (p.juujitsu + gain(p, d2)).coerceIn(0, 999)
+        p.yuujou = (p.yuujou + gain(p, d3)).coerceIn(0, 999)
+        if (kind == EventKind.WEDDING) p.married = true
+        if (kind == EventKind.BIRTH) p.hasChild = true
+        if (skip) p.skipNext = true
+        updateStatsBar()
+        if (dMove != 0) {
+            statusText.text = if (dMove > 0) "${p.chara.name} は ${dMove}マス すすむ！"
+                              else "${p.chara.name} は ${-dMove}マス もどる…"
+            handler.postDelayed({ movePiece(p, dMove, fromEvent = true) }, Speed.eventWaitMs)
+        } else {
+            nextTurn()
+        }
+    }
+
+    /**
+     * 選択肢イベント。人間はボタンで えらび、CPUは自動で えらぶ。
+     * えらんだ結果は showChoiceResult で写真つきに見せる。
+     */
+    private fun showChoice(p: Player, ev: GameEvent) {
+        if (!p.isHuman) {
+            handler.postDelayed({ showChoiceResult(p, ev, cpuPickChoice(ev)) }, Speed.eventWaitMs)
+            statusText.text = "${who(p)} は かんがえている…"
+            return
+        }
+        val content = buildEventContent(
+            p, ev.bgRes, ev.groupSize, ev.kind, ev.message, Color.parseColor("#1565C0")
+        )
+        val dialog = AlertDialog.Builder(this)
+            .setView(ScrollView(this).apply { addView(content) })
+            .setCancelable(false)
+            .create()
+        for (c in ev.choices) {
+            content.addView(Button(this).apply {
+                text = c.label
+                textSize = 16f
+                setTextColor(Color.WHITE)
+                background = roundedBg(Color.parseColor("#1E88E5"))
+                setOnClickListener {
+                    dialog.dismiss()
+                    showChoiceResult(p, ev, c)
+                }
+            }, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(8) })
+        }
+        dialog.show()
+    }
+
+    /** CPUの えらびかた。のびが大きいものを えらぶが、3割は 気まぐれにする */
+    private fun cpuPickChoice(ev: GameEvent): Choice {
+        if (Random.nextInt(100) < 30) return ev.choices[Random.nextInt(ev.choices.size)]
+        return ev.choices.maxByOrNull {
+            it.dManpuku + it.dJuujitsu + it.dYuujou + it.dMove * 3 + (if (it.skipTurn) -15 else 0)
+        } ?: ev.choices[0]
+    }
+
+    /** えらんだ結果を写真つきで見せる */
+    private fun showChoiceResult(p: Player, ev: GameEvent, c: Choice) {
+        val head = if (p.isHuman) "" else "${who(p)} は「${c.label}」を えらんだ\n\n"
+        val text = head + c.message + (if (c.skipTurn) "\n\n💤 つぎの ばんは おやすみ…" else "")
+        val content = buildEventContent(
+            p, if (c.bgRes != 0) c.bgRes else ev.bgRes, ev.groupSize, ev.kind,
+            text, Color.parseColor("#1565C0")
+        )
+        AlertDialog.Builder(this)
+            .setView(ScrollView(this).apply { addView(content) })
+            .setCancelable(false)
+            .setPositiveButton("OK") { _, _ ->
+                applyOutcome(p, c.dManpuku, c.dJuujitsu, c.dYuujou, c.dMove, c.skipTurn, ev.kind)
+            }
+            .show()
+    }
+
+    /** 写真＋キャラの並び＋メッセージ枠 を組み立てる（通常イベントと選択肢で共用） */
+    private fun buildEventContent(
+        p: Player, bgRes: Int, groupSize: Int, kind: EventKind,
+        message: String, borderColor: Int
+    ): LinearLayout {
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), dp(12), dp(12), dp(12))
         }
         val frame = FrameLayout(this)
         frame.addView(ImageView(this).apply {
-            setImageResource(ev.bgRes)
+            setImageResource(bgRes)
             scaleType = ImageView.ScaleType.FIT_CENTER
             adjustViewBounds = true
         }, FrameLayout.LayoutParams(
@@ -1695,9 +1829,9 @@ class MainActivity : Activity() {
 
         // Triple(画像res, 本人か, 家族か)
         val lineup = ArrayList<Triple<Int, Boolean, Boolean>>()
-        val showPartner = p.married || ev.kind == EventKind.WEDDING
-        val showChild = p.hasChild || ev.kind == EventKind.BIRTH
-        val friends = charas.filter { it != p.chara }.take((ev.groupSize - 1).coerceIn(0, 3))
+        val showPartner = p.married || kind == EventKind.WEDDING
+        val showChild = p.hasChild || kind == EventKind.BIRTH
+        val friends = charas.filter { it != p.chara }.take((groupSize - 1).coerceIn(0, 3))
         if (friends.isNotEmpty()) lineup.add(Triple(friends[0].resId, false, false))
         lineup.add(Triple(p.chara.resId, true, false))
         if (showPartner) lineup.add(Triple(p.chara.partnerRes, false, true))
@@ -1741,21 +1875,32 @@ class MainActivity : Activity() {
         ))
         content.addView(frame)
 
-        val bonusHit = meetsCond(p, ev)
         content.addView(TextView(this).apply {
-            text = ev.message +
-                if (bonusHit && ev.condMessage.isNotBlank()) "\n\n✨ ${ev.condMessage}" else ""
+            text = message
             textSize = 16f
             setTextColor(Color.parseColor("#263238"))
             setPadding(dp(14), dp(12), dp(14), dp(12))
-            background = roundedBg(
-                Color.WHITE,
-                if (bonusHit) Color.parseColor("#F9A825") else Color.parseColor("#33691E")
-            )
+            background = roundedBg(Color.WHITE, borderColor)
         }, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = dp(10) })
+        return content
+    }
 
+    /** 通常イベント（選択肢が あれば showChoice へ まわす） */
+    private fun showEvent(p: Player, ev: GameEvent) {
+        if (ev.choices.isNotEmpty()) {
+            showChoice(p, ev)
+            return
+        }
+        val bonusHit = meetsCond(p, ev)
+        val text = ev.message +
+            (if (bonusHit && ev.condMessage.isNotBlank()) "\n\n✨ ${ev.condMessage}" else "") +
+            (if (ev.skipTurn) "\n\n💤 つぎの ばんは おやすみ…" else "")
+        val content = buildEventContent(
+            p, ev.bgRes, ev.groupSize, ev.kind, text,
+            if (bonusHit) Color.parseColor("#F9A825") else Color.parseColor("#33691E")
+        )
         AlertDialog.Builder(this)
             .setView(ScrollView(this).apply { addView(content) })
             .setCancelable(false)
@@ -1769,19 +1914,7 @@ class MainActivity : Activity() {
                     d2 += ev.condBonus2
                     d3 += ev.condBonus3
                 }
-                p.manpuku = (p.manpuku + gain(p, d1)).coerceIn(0, 999)
-                p.juujitsu = (p.juujitsu + gain(p, d2)).coerceIn(0, 999)
-                p.yuujou = (p.yuujou + gain(p, d3)).coerceIn(0, 999)
-                if (ev.kind == EventKind.WEDDING) p.married = true
-                if (ev.kind == EventKind.BIRTH) p.hasChild = true
-                updateStatsBar()
-                if (ev.dMove != 0) {
-                    statusText.text = if (ev.dMove > 0) "${p.chara.name} は ${ev.dMove}マス すすむ！"
-                                      else "${p.chara.name} は ${-ev.dMove}マス もどる…"
-                    handler.postDelayed({ movePiece(p, ev.dMove, fromEvent = true) }, Speed.eventWaitMs)
-                } else {
-                    nextTurn()
-                }
+                applyOutcome(p, d1, d2, d3, ev.dMove, ev.skipTurn, ev.kind)
             }
             .show()
     }
@@ -1806,6 +1939,12 @@ class MainActivity : Activity() {
         var badCells: Set<Int> = emptySet()
         var caveBadCells: Set<Int> = emptySet()
         var caveEventCells: Set<Int> = emptySet()
+        /** 1回休みマス */
+        var restCells: Set<Int> = emptySet()
+        var caveRestCells: Set<Int> = emptySet()
+        /** 選択肢マス */
+        var choiceCells: Set<Int> = emptySet()
+        var caveChoiceCells: Set<Int> = emptySet()
 
         fun count(cave: Boolean) = if (cave) CAVE_COUNT else MAIN_COUNT
         fun goal(cave: Boolean) = count(cave) - 1
@@ -1876,6 +2015,8 @@ class MainActivity : Activity() {
         private val examPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#EF5350") }
         private val jobPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#4DD0E1") }
         private val shopPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FFD54F") }
+        private val restPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#90A4AE") }
+        private val choicePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#42A5F5") }
         private val branchTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE; textAlign = Paint.Align.CENTER; typeface = Typeface.DEFAULT_BOLD
         }
@@ -2018,6 +2159,8 @@ class MainActivity : Activity() {
             i == 0 -> startPaint
             i == goalIndex -> goalPaint
             world -> when {
+                i in Board.caveChoiceCells -> choicePaint
+                i in Board.caveRestCells -> restPaint
                 i in Board.caveBadCells -> badPaint
                 i in Board.caveEventCells -> goodPaint
                 else -> cellPaint
@@ -2030,6 +2173,8 @@ class MainActivity : Activity() {
             i in Board.loveCells -> familyPaint          // こくはく = ピンク
             i in Board.jobCells -> jobPaint
             i in Board.shopCells -> shopPaint
+            i in Board.choiceCells -> choicePaint         // えらぶ = あお
+            i in Board.restCells -> restPaint             // おやすみ = グレー
             i in Board.badCells -> badPaint               // bad = むらさき
             i in Board.normalEventCells -> goodPaint      // good = みどり
             else -> cellPaint
@@ -2066,6 +2211,8 @@ class MainActivity : Activity() {
                 val x = worldX(i)
                 val eventCells = if (world) Board.caveEventCells else Board.normalEventCells
                 val badCells = if (world) Board.caveBadCells else Board.badCells
+                val restCells = if (world) Board.caveRestCells else Board.restCells
+                val choiceCells = if (world) Board.caveChoiceCells else Board.choiceCells
                 canvas.drawCircle(x, laneY, cellR, cellFill(i))
                 canvas.drawCircle(x, laneY, cellR, cellEdge)
                 when {
@@ -2080,6 +2227,8 @@ class MainActivity : Activity() {
                     !world && i in Board.loveCells -> canvas.drawText("💗", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
                     !world && i in Board.jobCells -> canvas.drawText("💼", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
                     !world && i in Board.shopCells -> canvas.drawText("🛒", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
+                    i in choiceCells -> canvas.drawText("❓", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
+                    i in restCells -> canvas.drawText("💤", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
                     i in badCells -> canvas.drawText("💧", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
                     i in eventCells -> canvas.drawText("⭐", x, laneY + eventTextPaint.textSize / 3, eventTextPaint)
                     else -> canvas.drawText("$i", x, laneY + textPaint.textSize / 3, textPaint)

@@ -134,12 +134,26 @@
           "cell": 11,
           "bg": "bg_pool",
           "kind": "normal",
-          "message": "プールで およぎすぎた。\n満腹-5　充実10　3マス もどる",
-          "manpuku": -5,
-          "juujitsu": 10,
-          "yuujou": 5,
+          "message": "プールに ついた！\nどうする？",
           "group": 3,
-          "move": -3
+          "choices": [
+            {
+              "label": "おもいきり およぐ",
+              "bg": "bg_pool",
+              "message": "おもいきり およいだ！\n満腹-5　充実18　友情8\n3マス もどる",
+              "manpuku": -5,
+              "juujitsu": 18,
+              "yuujou": 8,
+              "move": -3
+            },
+            {
+              "label": "ひなたで ひとやすみ",
+              "bg": "bg_cafe",
+              "message": "ジュースを のんで やすんだ。\n満腹8　充実6",
+              "manpuku": 8,
+              "juujitsu": 6
+            }
+          ]
         },
         {
           "cell": 12,
@@ -223,12 +237,13 @@
           "cell": 21,
           "bg": "bg_darkroom",
           "kind": "normal",
-          "message": "こわくて ねむれなかった…。\n満腹-10　充実-5",
-          "manpuku": -10,
-          "juujitsu": -5,
+          "message": "こわくて ねむれなかった…。\n満腹-6　充実-4",
+          "manpuku": -6,
+          "juujitsu": -4,
           "yuujou": 0,
           "group": 1,
-          "move": 0
+          "move": 0,
+          "skip": true
         },
         {
           "cell": 22,
@@ -489,23 +504,38 @@
           "cell": 22,
           "bg": "bg_mountain",
           "kind": "normal",
-          "message": "やまに のぼった。\n満腹-10　充実20　友情15　3マス もどる",
-          "manpuku": -10,
-          "juujitsu": 20,
-          "yuujou": 15,
+          "message": "やまの ふもとに ついた。\nどうする？",
           "group": 4,
-          "move": -3
+          "choices": [
+            {
+              "label": "ちょうじょうまで のぼる",
+              "bg": "bg_mountain",
+              "message": "ちょうじょうから けしきを 見た！\n満腹-10　充実25　友情15\n3マス もどる",
+              "manpuku": -10,
+              "juujitsu": 25,
+              "yuujou": 15,
+              "move": -3
+            },
+            {
+              "label": "ふもとで しゃしんを とる",
+              "bg": "bg_town",
+              "message": "きれいな しゃしんが とれた。\n充実12　友情6",
+              "juujitsu": 12,
+              "yuujou": 6
+            }
+          ]
         },
         {
           "cell": 23,
           "bg": "bg_datsuijo",
           "kind": "normal",
-          "message": "おふろで のぼせた…。\n満腹-8　充実-5",
-          "manpuku": -8,
-          "juujitsu": -5,
+          "message": "おふろで のぼせて しまった…。\n満腹-5　充実-3",
+          "manpuku": -5,
+          "juujitsu": -3,
           "yuujou": 0,
           "group": 2,
-          "move": 0
+          "move": 0,
+          "skip": true
         },
         {
           "cell": 24,
@@ -633,12 +663,27 @@
           "cell": 10,
           "bg": "bg_waterpark",
           "kind": "normal",
-          "message": "ウォーターパークで あそんだ。\n満腹-5　充実20　友情15　3マス もどる",
-          "manpuku": -5,
-          "juujitsu": 20,
-          "yuujou": 15,
+          "message": "ウォーターパークに ついた！\nどれで あそぶ？",
           "group": 4,
-          "move": -3
+          "choices": [
+            {
+              "label": "ウォータースライダー",
+              "bg": "bg_waterpark",
+              "message": "スライダーで おおはしゃぎ！\n満腹-5　充実22　友情15\n3マス もどる",
+              "manpuku": -5,
+              "juujitsu": 22,
+              "yuujou": 15,
+              "move": -3
+            },
+            {
+              "label": "ながれる プール",
+              "bg": "bg_pool",
+              "message": "のんびり ういて すごした。\n満腹5　充実12　友情8",
+              "manpuku": 5,
+              "juujitsu": 12,
+              "yuujou": 8
+            }
+          ]
         },
         {
           "cell": 11,
@@ -685,12 +730,13 @@
           "cell": 16,
           "bg": "bg_sickroom",
           "kind": "normal",
-          "message": "かぜを ひいて にゅういん…。\n満腹-15　充実-15　3マス もどる",
-          "manpuku": -15,
-          "juujitsu": -15,
+          "message": "かぜを ひいて にゅういん…。\n満腹-10　充実-10",
+          "manpuku": -10,
+          "juujitsu": -10,
           "yuujou": 0,
           "group": 1,
-          "move": -3
+          "move": 0,
+          "skip": true
         },
         {
           "cell": 17,

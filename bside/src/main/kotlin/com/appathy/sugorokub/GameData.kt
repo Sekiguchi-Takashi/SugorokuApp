@@ -165,8 +165,42 @@ object GameData {
             failLoss = num("failLoss", 3),
             failMove = num("failMove", -2),
             passMessage = str("passMessage", ""),
-            failMessage = str("failMessage", "")
+            failMessage = str("failMessage", ""),
+            // 1回休み・選択肢
+            skipTurn = if (o.has("skip")) o.optBoolean("skip", false)
+                       else base?.optBoolean("skip", false) ?: false,
+            choices = parseChoices(context, o.optJSONArray("choices"))
         )
+    }
+
+    /**
+     * 選択肢イベントの choices 配列を読む。label が空の項目は とばす。
+     * bg を省略すると 親イベントの写真を使う（bgRes = 0）。
+     */
+    private fun parseChoices(
+        context: Context,
+        arr: org.json.JSONArray?
+    ): List<MainActivity.Choice> {
+        if (arr == null) return emptyList()
+        val list = ArrayList<MainActivity.Choice>()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val label = o.optString("label", "")
+            if (label.isBlank()) continue
+            list.add(
+                MainActivity.Choice(
+                    label = label,
+                    message = o.optString("message", ""),
+                    bgRes = if (o.has("bg")) drawableId(context, o.optString("bg", "")) else 0,
+                    dManpuku = o.optInt("manpuku", 0),
+                    dJuujitsu = o.optInt("juujitsu", 0),
+                    dYuujou = o.optInt("yuujou", 0),
+                    dMove = o.optInt("move", 0),
+                    skipTurn = o.optBoolean("skip", false)
+                )
+            )
+        }
+        return list
     }
 
     /**

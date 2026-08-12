@@ -11,8 +11,8 @@ android {
         applicationId = "com.appathy.sugoroku"
         minSdk = 26
         targetSdk = 34
-        versionCode = 32
-        versionName = "5.5-A"
+        versionCode = 33
+        versionName = "5.6-A"
     }
 
     signingConfigs {
