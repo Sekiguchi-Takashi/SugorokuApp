@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 rootProject.name = "SugorokuApp"
 include(":app")
 include(":bside")
+include(":human")

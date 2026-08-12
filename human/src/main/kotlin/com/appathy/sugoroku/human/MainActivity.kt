@@ -17,6 +17,8 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
+import android.media.MediaPlayer
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -31,6 +33,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.VideoView
 import org.json.JSONObject
 import kotlin.math.abs
 import kotlin.math.cos
@@ -38,7 +41,7 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * にんげんすごろく v1.0
+ * 人生ゲーム（にんげんすごろく）
  * どうぶつすごろく（SugorokuApp）から切り出した人間版（B面）。
  * 45マスの学園すごろく。小学校 → 中学校 → 高校 の3ステージ。
  * 依存ゼロ / XMLレイアウト不使用 / 全てプログラマティックUI。
@@ -62,7 +65,7 @@ class MainActivity : Activity() {
     class Cell(
         val i: Int, val type: String, val title: String, val text: String,
         val d: Delta, val move: Int, val rest: Int,
-        val choices: List<Choice>, val ch: Challenge?
+        val choices: List<Choice>, val ch: Challenge?, val love: Boolean
     )
 
     class Stage(val key: String, val name: String, val from: Int, val to: Int)
@@ -78,12 +81,15 @@ class MainActivity : Activity() {
         var rest = 0
         var done = false
         var goalOrder = 0
+        var crush: Chara? = null
+        var partner: Chara? = null
     }
 
     // ---------------- 状態 ----------------
 
     private val handler = Handler(Looper.getMainLooper())
     private var charas: List<Chara> = ArrayList()
+    private var partners: List<Chara> = ArrayList()
     private var cells: List<Cell> = ArrayList()
     private var stages: List<Stage> = ArrayList()
     private var endings: List<Ending> = ArrayList()
@@ -176,11 +182,11 @@ class MainActivity : Activity() {
         return Delta(o.optInt("st", 0), o.optInt("sp", 0), o.optInt("pp", 0), o.optInt("mn", 0))
     }
 
-    private fun loadData() {
+    private fun readCharaSet(root: JSONObject, setName: String): List<Chara> {
         val cl = ArrayList<Chara>()
-        val cj = JSONObject(readAsset("charas_human.json"))
-        val set = cj.getJSONObject("sets").getJSONObject("human")
-        val arr = set.getJSONArray("charas")
+        val sets = root.getJSONObject("sets")
+        val set = sets.optJSONObject(setName) ?: return cl
+        val arr = set.optJSONArray("charas") ?: return cl
         var i = 0
         while (i < arr.length()) {
             val o = arr.getJSONObject(i)
@@ -199,9 +205,16 @@ class MainActivity : Activity() {
             }
             i++
         }
-        charas = cl
+        return cl
+    }
+
+    private fun loadData() {
+        val cj = JSONObject(readAsset("charas_human.json"))
+        charas = readCharaSet(cj, "human")
+        partners = readCharaSet(cj, "partner")
 
         val ej = JSONObject(readAsset("events_human.json"))
+        var i = 0
 
         val sl = ArrayList<Stage>()
         val sarr = ej.getJSONArray("stages")
@@ -249,7 +262,8 @@ class MainActivity : Activity() {
                     o.optInt("move", 0),
                     o.optInt("rest", 0),
                     chs,
-                    chal
+                    chal,
+                    o.optBoolean("love", false)
                 )
             )
             i++
@@ -305,10 +319,10 @@ class MainActivity : Activity() {
         root.setBackgroundColor(Color.parseColor("#FFF6E5"))
         root.gravity = Gravity.CENTER
 
-        val t = label("にんげんすごろく", 34f, Color.parseColor("#3A5A40"))
+        val t = label("すごろく人生ゲーム", 30f, Color.parseColor("#3A5A40"))
         t.setTypeface(Typeface.DEFAULT_BOLD)
         root.addView(t)
-        root.addView(label("しょうがっこう から こうこうまで", 15f, Color.parseColor("#6B705C")))
+        root.addView(label("しょうがっこう から こうこうまで の すごろく", 15f, Color.parseColor("#6B705C")))
 
         val row = LinearLayout(this)
         row.orientation = LinearLayout.HORIZONTAL
@@ -377,6 +391,66 @@ class MainActivity : Activity() {
         setContentView(root)
     }
 
+    // ---------------- 紹介ムービー ----------------
+    // res/raw/intro_<NN>.mp4 があればキャラ決定時に再生する。無ければ何もせず次へ進む。
+
+    private fun introResFor(charaIndex: Int): Int {
+        val n = charaIndex + 1
+        val nn = if (n < 10) "0" + n else n.toString()
+        return resources.getIdentifier("intro_" + nn, "raw", packageName)
+    }
+
+    private fun playIntro(resId: Int, after: () -> Unit) {
+        if (resId == 0) {
+            after()
+            return
+        }
+        val root = FrameLayout(this)
+        root.setBackgroundColor(Color.BLACK)
+
+        val vv = VideoView(this)
+        val vlp = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        vlp.gravity = Gravity.CENTER
+        vv.layoutParams = vlp
+        root.addView(vv)
+
+        val tip = label("タップで スキップ", 14f, Color.WHITE)
+        val tlp = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        tlp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+        tlp.bottomMargin = dpi(28f)
+        tip.layoutParams = tlp
+        root.addView(tip)
+
+        var finished = false
+        val finish = {
+            if (!finished) {
+                finished = true
+                vv.stopPlayback()
+                after()
+            }
+        }
+
+        root.setOnClickListener { finish() }
+        vv.setOnClickListener { finish() }
+        tip.setOnClickListener { finish() }
+        vv.setOnCompletionListener { finish() }
+        vv.setOnErrorListener { _: MediaPlayer?, _: Int, _: Int ->
+            finish()
+            true
+        }
+        vv.setOnPreparedListener { mp: MediaPlayer ->
+            mp.setVolume(0.7f, 0.7f)
+        }
+        vv.setVideoURI(Uri.parse("android.resource://" + packageName + "/" + resId))
+        setContentView(root)
+        vv.start()
+        handler.postDelayed({ finish() }, 15000)
+    }
+
     // ---------------- キャラ選択 ----------------
 
     private fun showCharaSelect(index: Int) {
@@ -416,7 +490,7 @@ class MainActivity : Activity() {
                 item.setOnClickListener {
                     picked.add(idx)
                     players.add(Player(c, false))
-                    showCharaSelect(index + 1)
+                    playIntro(introResFor(idx)) { showCharaSelect(index + 1) }
                 }
             }
             row!!.addView(item)
@@ -534,7 +608,11 @@ class MainActivity : Activity() {
             val cpuMark = if (p.cpu) "(CPU)" else ""
             t1.text = mark + p.chara.name + cpuMark
             t1.setTypeface(if (i == turn) Typeface.DEFAULT_BOLD else Typeface.DEFAULT)
-            t2.text = "べ" + p.st + " う" + p.sp + " に" + p.pp + "\n¥" + p.mn
+            var extra = ""
+            val pt = p.partner
+            val cr = p.crush
+            if (pt != null) extra = "\n♥" + pt.name else if (cr != null) extra = "\n…" + cr.name
+            t2.text = "べ" + p.st + " う" + p.sp + " に" + p.pp + "\n¥" + p.mn + extra
             i++
         }
     }
@@ -654,6 +732,44 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun doCrush(p: Player, cell: Cell, after: () -> Unit) {
+        if (partners.isEmpty()) {
+            after()
+            return
+        }
+        val idx = ArrayList<Int>()
+        var i = 0
+        while (i < partners.size) {
+            idx.add(i)
+            i++
+        }
+        idx.shuffle()
+        val pool = ArrayList<Chara>()
+        i = 0
+        while (i < idx.size && pool.size < 3) {
+            pool.add(partners[idx[i]])
+            i++
+        }
+        if (p.cpu) {
+            val c = pool[Random.nextInt(pool.size)]
+            p.crush = c
+            updateStats()
+            message(cell.title, cell.text + "\n\n" + c.name + " が きに なるみたい。") { after() }
+        } else {
+            val names = Array<CharSequence>(pool.size) { k -> pool[k].name }
+            val b = AlertDialog.Builder(this)
+            b.setTitle(cell.title + "：きに なる人は？")
+            b.setCancelable(false)
+            b.setItems(names) { _, which ->
+                val c = pool[which]
+                p.crush = c
+                updateStats()
+                message(cell.title, c.name + " のことが きに なりはじめた。\n\nこうこうの「こくはく」で にんきが たりれば こいびとに なれる。") { after() }
+            }
+            b.show()
+        }
+    }
+
     private fun onLanded(p: Player, allowChain: Boolean) {
         val cell = cells[p.pos]
         boardView?.invalidate()
@@ -691,14 +807,33 @@ class MainActivity : Activity() {
             return
         }
 
+        if (cell.type == "CRUSH") {
+            applyDelta(p, cell.d)
+            doCrush(p, cell) { afterCell(p, cell, allowChain) }
+            return
+        }
+
         if (cell.type == "CHALLENGE" && cell.ch != null) {
             val ch = cell.ch
+            if (cell.love && p.crush == null && partners.size > 0) {
+                p.crush = partners[Random.nextInt(partners.size)]
+            }
             val v = statOf(p, ch.stat)
             val ok = v >= ch.need
             val d = if (ok) ch.ok else ch.ng
             applyDelta(p, d)
-            val head = cell.text + "\n\n" + statLabel(ch.stat) + " " + v + " / ひつよう " + ch.need
-            val body = head + "\n\n" + (if (ok) ch.okText else ch.ngText) + "\n" + deltaText(d)
+            var who = ""
+            val cr = p.crush
+            if (cell.love && cr != null) {
+                who = "あいて: " + cr.name + "\n\n"
+                if (ok) {
+                    p.partner = cr
+                    updateStats()
+                }
+            }
+            val head = who + cell.text + "\n\n" + statLabel(ch.stat) + " " + v + " / ひつよう " + ch.need
+            var body = head + "\n\n" + (if (ok) ch.okText else ch.ngText) + "\n" + deltaText(d)
+            if (cell.love && ok && cr != null) body = body + "\n\n" + cr.name + " と こいびとに なった！"
             message(cell.title, body) { afterCell(p, cell, allowChain) }
             return
         }
@@ -759,7 +894,9 @@ class MainActivity : Activity() {
     // ---------------- けっか ----------------
 
     private fun score(p: Player): Int {
-        return p.st * 3 + p.sp * 3 + p.pp * 3 + p.mn / 200
+        var v = p.st * 3 + p.sp * 3 + p.pp * 3 + p.mn / 200
+        if (p.partner != null) v += 15
+        return v
     }
 
     private fun endingOf(p: Player): Ending {
@@ -820,6 +957,12 @@ class MainActivity : Activity() {
             col.addView(t1)
             col.addView(t2)
             col.addView(t3)
+            val pt = p.partner
+            if (pt != null) {
+                val t4 = label("♥ " + pt.name + " と いっしょに あるいていく", 13f, Color.parseColor("#B5838D"))
+                t4.gravity = Gravity.LEFT
+                col.addView(t4)
+            }
             box.addView(col)
             root.addView(box)
             rank++

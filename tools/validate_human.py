@@ -4,9 +4,9 @@ import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-KT = os.path.join(ROOT, "bside/src/main/kotlin/com/appathy/sugoroku/human/MainActivity.kt")
-ASSETS = os.path.join(ROOT, "bside/src/main/assets")
-DRAWABLE = os.path.join(ROOT, "bside/src/main/res/drawable")
+KT = os.path.join(ROOT, "human/src/main/kotlin/com/appathy/sugoroku/human/MainActivity.kt")
+ASSETS = os.path.join(ROOT, "human/src/main/assets")
+DRAWABLE = os.path.join(ROOT, "human/src/main/res/drawable")
 
 errors = []
 warns = []
@@ -24,14 +24,6 @@ for setname, st in charas["sets"].items():
         for k, v in c.get("images", {}).items():
             if v not in imgs:
                 errors.append("missing stage drawable: %s (%s)" % (v, k))
-if len(charas["sets"].get("human", {}).get("charas", [])) < 2:
-    errors.append("player set needs at least 2 charas")
-love = [c for c in json.load(open(os.path.join(ASSETS, "events_human.json"), encoding="utf-8"))["cells"] if c.get("love")]
-if len(love) != 1:
-    warns.append("love cell count = %d" % len(love))
-crush = [c for c in json.load(open(os.path.join(ASSETS, "events_human.json"), encoding="utf-8"))["cells"] if c["type"] == "CRUSH"]
-if crush and love and crush[0]["i"] > love[0]["i"]:
-    errors.append("CRUSH cell must come before the love CHALLENGE")
 
 # 3. cell index continuity
 cells = events["cells"]

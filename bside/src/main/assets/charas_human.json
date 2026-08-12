@@ -1,28 +1,23 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 2,
   "stageKeys": ["baby", "kinder", "elem", "jhs", "high", "univ", "work", "senior"],
-  "note": "human=プレイヤー6人 / partner=恋人候補6人。images に無いステージは近いステージへフォールバック。向き違いは同名+_s(側面)/_b(背面)を置くと自動的に使われる。",
+  "note": "images に無いステージは近いステージの画像へフォールバックする。向き違いは同名+_s(側面)/_b(背面) を追加すると自動的に使われる。",
   "sets": {
     "human": {
-      "label": "プレイヤー",
+      "label": "にんげん",
       "charas": [
         { "name": "あかり", "img": "chara_kid01", "images": { "elem": "chara_kid01", "jhs": "chara_jhs01" } },
         { "name": "みなみ", "img": "chara_kid02", "images": { "elem": "chara_kid02", "jhs": "chara_jhs02" } },
-        { "name": "さくら", "img": "chara_kid12", "images": { "elem": "chara_kid12", "jhs": "chara_jhs12" } },
-        { "name": "はやと", "img": "chara_kid07", "images": { "elem": "chara_kid07", "jhs": "chara_jhs07" } },
-        { "name": "けんと", "img": "chara_kid09", "images": { "elem": "chara_kid09", "jhs": "chara_jhs09" } },
-        { "name": "たける", "img": "chara_kid10", "images": { "elem": "chara_kid10", "jhs": "chara_jhs10" } }
-      ]
-    },
-    "partner": {
-      "label": "こいびとこうほ",
-      "charas": [
-        { "name": "ひまり", "img": "chara_kid04", "images": { "elem": "chara_kid04", "jhs": "chara_jhs04" } },
-        { "name": "しおり", "img": "chara_kid06", "images": { "elem": "chara_kid06", "jhs": "chara_jhs06" } },
-        { "name": "ゆい", "img": "chara_kid08", "images": { "elem": "chara_kid08", "jhs": "chara_jhs08" } },
         { "name": "そうた", "img": "chara_kid03", "images": { "elem": "chara_kid03", "jhs": "chara_jhs03" } },
+        { "name": "ひまり", "img": "chara_kid04", "images": { "elem": "chara_kid04", "jhs": "chara_jhs04" } },
         { "name": "りく", "img": "chara_kid05", "images": { "elem": "chara_kid05", "jhs": "chara_jhs05" } },
-        { "name": "あおい", "img": "chara_kid11", "images": { "elem": "chara_kid11", "jhs": "chara_jhs11" } }
+        { "name": "しおり", "img": "chara_kid06", "images": { "elem": "chara_kid06", "jhs": "chara_jhs06" } },
+        { "name": "はやと", "img": "chara_kid07", "images": { "elem": "chara_kid07", "jhs": "chara_jhs07" } },
+        { "name": "ゆい", "img": "chara_kid08", "images": { "elem": "chara_kid08", "jhs": "chara_jhs08" } },
+        { "name": "けんと", "img": "chara_kid09", "images": { "elem": "chara_kid09", "jhs": "chara_jhs09" } },
+        { "name": "たける", "img": "chara_kid10", "images": { "elem": "chara_kid10", "jhs": "chara_jhs10" } },
+        { "name": "あおい", "img": "chara_kid11", "images": { "elem": "chara_kid11", "jhs": "chara_jhs11" } },
+        { "name": "さくら", "img": "chara_kid12", "images": { "elem": "chara_kid12", "jhs": "chara_jhs12" } }
       ]
     }
   }
