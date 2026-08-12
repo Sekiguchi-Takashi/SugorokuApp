@@ -35,8 +35,20 @@ if cells[0]["type"] != "START":
 if cells[-1]["type"] != "GOAL":
     errors.append("last cell must be GOAL")
 
+stages = events["stages"]
+for n, st in enumerate(stages[:-1]):
+    if cells[st["to"]]["type"] != "STAGEGOAL":
+        errors.append("stage %s must end with STAGEGOAL at %d" % (st["key"], st["to"]))
+for n, st in enumerate(stages):
+    if n > 0 and st["from"] != stages[n - 1]["to"] + 1:
+        errors.append("stage range gap before %s" % st["key"])
+bgs = {os.path.splitext(f)[0] for f in os.listdir(DRAWABLE)}
+for c in cells:
+    if c.get("bg") and c["bg"] not in bgs:
+        errors.append("missing bg drawable at %d: %s" % (c["i"], c["bg"]))
+
 # 4. type-specific required fields
-VALID = {"START", "GOAL", "NORMAL", "GOOD", "BAD", "WARP", "REST", "CHOICE", "CHALLENGE", "CRUSH", "AGAIN", "RANDOM"}
+VALID = {"START", "GOAL", "NORMAL", "GOOD", "BAD", "WARP", "REST", "CHOICE", "CHALLENGE", "CRUSH", "AGAIN", "RANDOM", "STAGEGOAL"}
 for c in cells:
     if c["type"] not in VALID:
         errors.append("unknown type at %d: %s" % (c["i"], c["type"]))

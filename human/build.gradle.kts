@@ -17,8 +17,8 @@ android {
         applicationId = "com.appathy.sugoroku.human"
         minSdk = 26
         targetSdk = 34
-        versionCode = 15
-        versionName = "2.5"
+        versionCode = 19
+        versionName = "3.0"
     }
 
     if (keystoreFile != null) {

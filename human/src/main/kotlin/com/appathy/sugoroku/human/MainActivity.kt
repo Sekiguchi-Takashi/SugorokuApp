@@ -66,7 +66,7 @@ class MainActivity : Activity() {
         val i: Int, val type: String, val title: String, val text: String,
         val d: Delta, val move: Int, val rest: Int,
         val choices: List<Choice>, val ch: Challenge?, val love: Boolean,
-        val goalKey: String
+        val goalKey: String, val bg: String
     )
 
     class Stage(val key: String, val name: String, val from: Int, val to: Int)
@@ -85,6 +85,7 @@ class MainActivity : Activity() {
         var crush: Chara? = null
         var partner: Chara? = null
         val goals = HashSet<String>()
+        var stageWins = 0
     }
 
     // ---------------- 状態 ----------------
@@ -120,6 +121,17 @@ class MainActivity : Activity() {
 
     private val stageKeys = listOf("baby", "kinder", "elem", "jhs", "high", "univ", "work", "senior")
     private val resCache = HashMap<String, Int>()
+
+    private var currentBg = ""
+
+    private fun stageIndexAt(pos: Int): Int {
+        var i = 0
+        while (i < stages.size) {
+            if (pos >= stages[i].from && pos <= stages[i].to) return i
+            i++
+        }
+        return if (stages.isEmpty()) 0 else stages.size - 1
+    }
 
     private fun stageKeyAt(pos: Int): String {
         var i = 0
@@ -269,7 +281,8 @@ class MainActivity : Activity() {
                     chs,
                     chal,
                     o.optBoolean("love", false),
-                    o.optString("goal", "")
+                    o.optString("goal", ""),
+                    o.optString("bg", "")
                 )
             )
             i++
@@ -691,8 +704,14 @@ class MainActivity : Activity() {
         stepMove(p, n)
     }
 
+    private fun stageLimit(pos: Int): Int {
+        val si = stageIndexAt(pos)
+        if (stages.isEmpty()) return cells.size - 1
+        return stages[si].to
+    }
+
     private fun stepMove(p: Player, remain: Int) {
-        if (remain <= 0 || p.pos >= cells.size - 1) {
+        if (remain <= 0 || p.pos >= cells.size - 1 || p.pos >= stageLimit(p.pos)) {
             handler.postDelayed({ onLanded(p, true) }, 200)
             return
         }
@@ -732,14 +751,34 @@ class MainActivity : Activity() {
         if (p.cpu) {
             log("[" + title + "] " + body)
             handler.postDelayed({ after() }, 1200)
-        } else {
-            AlertDialog.Builder(this)
-                .setTitle(title)
-                .setMessage(body)
-                .setCancelable(false)
-                .setPositiveButton("OK") { _, _ -> after() }
-                .show()
+            return
         }
+        val b = AlertDialog.Builder(this)
+        b.setTitle(title)
+        b.setCancelable(false)
+        val rid = if (currentBg.isEmpty()) 0 else resources.getIdentifier(currentBg, "drawable", packageName)
+        if (rid != 0) {
+            val col = LinearLayout(this)
+            col.orientation = LinearLayout.VERTICAL
+            val iv = ImageView(this)
+            iv.setImageResource(rid)
+            iv.scaleType = ImageView.ScaleType.CENTER_CROP
+            iv.layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dpi(150f)
+            )
+            col.addView(iv)
+            val tv = TextView(this)
+            tv.text = body
+            tv.textSize = 15f
+            tv.setTextColor(Color.parseColor("#2F3E46"))
+            tv.setPadding(dpi(20f), dpi(14f), dpi(20f), dpi(4f))
+            col.addView(tv)
+            b.setView(col)
+        } else {
+            b.setMessage(body)
+        }
+        b.setPositiveButton("OK") { _, _ -> after() }
+        b.show()
     }
 
     private fun doCrush(p: Player, cell: Cell, after: () -> Unit) {
@@ -780,9 +819,39 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun advanceStage(fromStage: Int) {
+        val next = fromStage + 1
+        if (next >= stages.size) return
+        val to = stages[next].from
+        var i = 0
+        while (i < players.size) {
+            players[i].pos = to
+            players[i].rest = 0
+            i++
+        }
+        boardView?.focus(to)
+        boardView?.invalidate()
+        updateStatus()
+    }
+
     private fun onLanded(p: Player, allowChain: Boolean) {
         val cell = cells[p.pos]
+        currentBg = cell.bg
         boardView?.invalidate()
+
+        if (cell.type == "STAGEGOAL") {
+            val si = stageIndexAt(p.pos)
+            p.stageWins++
+            applyDelta(p, cell.d)
+            val nextName = if (si + 1 < stages.size) stages[si + 1].name else ""
+            val body = cell.text + "\n\n" + p.chara.name + " が いちばんに " + stages[si].name +
+                    " を ぬけた！\n\nみんなで " + nextName + " へ すすむ。"
+            message(cell.title, body) {
+                advanceStage(si)
+                handler.postDelayed({ nextTurn() }, 300)
+            }
+            return
+        }
 
         if (cell.type == "GOAL") {
             p.done = true
@@ -955,6 +1024,7 @@ class MainActivity : Activity() {
         var v = p.st * 3 + p.sp * 3 + p.pp * 3 + p.mn / 200
         if (p.partner != null) v += 15
         v += p.goals.size * 20
+        v += p.stageWins * 10
         return v
     }
 
