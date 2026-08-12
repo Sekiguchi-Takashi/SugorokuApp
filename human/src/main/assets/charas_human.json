@@ -1,28 +1,157 @@
 {
   "schemaVersion": 3,
-  "stageKeys": ["baby", "kinder", "elem", "jhs", "high", "univ", "work", "senior"],
+  "stageKeys": [
+    "baby",
+    "kinder",
+    "elem",
+    "jhs",
+    "high",
+    "univ",
+    "work",
+    "senior"
+  ],
   "note": "human=プレイヤー6人 / partner=恋人候補6人。images に無いステージは近いステージへフォールバック。向き違いは同名+_s(側面)/_b(背面)を置くと自動的に使われる。",
   "sets": {
     "human": {
       "label": "プレイヤー",
       "charas": [
-        { "name": "あかり", "img": "chara_kid01", "images": { "elem": "chara_kid01", "jhs": "chara_jhs01" } },
-        { "name": "みなみ", "img": "chara_kid02", "images": { "elem": "chara_kid02", "jhs": "chara_jhs02" } },
-        { "name": "さくら", "img": "chara_kid12", "images": { "elem": "chara_kid12", "jhs": "chara_jhs12" } },
-        { "name": "はやと", "img": "chara_kid07", "images": { "elem": "chara_kid07", "jhs": "chara_jhs07" } },
-        { "name": "けんと", "img": "chara_kid09", "images": { "elem": "chara_kid09", "jhs": "chara_jhs09" } },
-        { "name": "たける", "img": "chara_kid10", "images": { "elem": "chara_kid10", "jhs": "chara_jhs10" } }
+        {
+          "name": "あかり",
+          "img": "chara_kid01",
+          "images": {
+            "baby": "chara_baby01",
+            "kinder": "chara_kinder01",
+            "elem": "chara_elem01",
+            "jhs": "chara_jhs01",
+            "high": "chara_high01",
+            "univ": "chara_univ01"
+          }
+        },
+        {
+          "name": "みなみ",
+          "img": "chara_kid02",
+          "images": {
+            "baby": "chara_baby02",
+            "kinder": "chara_kinder02",
+            "elem": "chara_elem02",
+            "jhs": "chara_jhs02",
+            "high": "chara_high02",
+            "univ": "chara_univ02"
+          }
+        },
+        {
+          "name": "さくら",
+          "img": "chara_kid12",
+          "images": {
+            "baby": "chara_baby12",
+            "kinder": "chara_kinder12",
+            "elem": "chara_elem12",
+            "jhs": "chara_jhs12",
+            "high": "chara_high12",
+            "univ": "chara_univ12"
+          }
+        },
+        {
+          "name": "はやと",
+          "img": "chara_kid07",
+          "images": {
+            "baby": "chara_baby07",
+            "kinder": "chara_kinder07",
+            "elem": "chara_elem07",
+            "jhs": "chara_jhs07",
+            "high": "chara_high07",
+            "univ": "chara_univ07"
+          }
+        },
+        {
+          "name": "けんと",
+          "img": "chara_kid09",
+          "images": {
+            "baby": "chara_baby09",
+            "kinder": "chara_kinder09",
+            "elem": "chara_elem09",
+            "jhs": "chara_jhs09",
+            "high": "chara_high09",
+            "univ": "chara_univ09"
+          }
+        },
+        {
+          "name": "たける",
+          "img": "chara_kid10",
+          "images": {
+            "baby": "chara_baby10",
+            "kinder": "chara_kinder10",
+            "elem": "chara_elem10",
+            "jhs": "chara_jhs10",
+            "high": "chara_high10",
+            "univ": "chara_univ10"
+          }
+        }
       ]
     },
     "partner": {
       "label": "こいびとこうほ",
       "charas": [
-        { "name": "ひまり", "img": "chara_kid04", "images": { "elem": "chara_kid04", "jhs": "chara_jhs04" } },
-        { "name": "しおり", "img": "chara_kid06", "images": { "elem": "chara_kid06", "jhs": "chara_jhs06" } },
-        { "name": "ゆい", "img": "chara_kid08", "images": { "elem": "chara_kid08", "jhs": "chara_jhs08" } },
-        { "name": "そうた", "img": "chara_kid03", "images": { "elem": "chara_kid03", "jhs": "chara_jhs03" } },
-        { "name": "りく", "img": "chara_kid05", "images": { "elem": "chara_kid05", "jhs": "chara_jhs05" } },
-        { "name": "あおい", "img": "chara_kid11", "images": { "elem": "chara_kid11", "jhs": "chara_jhs11" } }
+        {
+          "name": "ひまり",
+          "img": "chara_kid04",
+          "images": {
+            "elem": "chara_kid04",
+            "jhs": "chara_jhs04",
+            "high": "chara_high04",
+            "univ": "chara_univ04"
+          }
+        },
+        {
+          "name": "しおり",
+          "img": "chara_kid06",
+          "images": {
+            "elem": "chara_kid06",
+            "jhs": "chara_jhs06",
+            "high": "chara_high06",
+            "univ": "chara_univ06"
+          }
+        },
+        {
+          "name": "ゆい",
+          "img": "chara_kid08",
+          "images": {
+            "elem": "chara_kid08",
+            "jhs": "chara_jhs08",
+            "high": "chara_high08",
+            "univ": "chara_univ08"
+          }
+        },
+        {
+          "name": "そうた",
+          "img": "chara_kid03",
+          "images": {
+            "elem": "chara_kid03",
+            "jhs": "chara_jhs03",
+            "high": "chara_high03",
+            "univ": "chara_univ03"
+          }
+        },
+        {
+          "name": "りく",
+          "img": "chara_kid05",
+          "images": {
+            "elem": "chara_kid05",
+            "jhs": "chara_jhs05",
+            "high": "chara_high05",
+            "univ": "chara_univ05"
+          }
+        },
+        {
+          "name": "あおい",
+          "img": "chara_kid11",
+          "images": {
+            "elem": "chara_kid11",
+            "jhs": "chara_jhs11",
+            "high": "chara_high11",
+            "univ": "chara_univ11"
+          }
+        }
       ]
     }
   }

@@ -65,7 +65,8 @@ class MainActivity : Activity() {
     class Cell(
         val i: Int, val type: String, val title: String, val text: String,
         val d: Delta, val move: Int, val rest: Int,
-        val choices: List<Choice>, val ch: Challenge?, val love: Boolean
+        val choices: List<Choice>, val ch: Challenge?, val love: Boolean,
+        val goalKey: String
     )
 
     class Stage(val key: String, val name: String, val from: Int, val to: Int)
@@ -83,6 +84,7 @@ class MainActivity : Activity() {
         var goalOrder = 0
         var crush: Chara? = null
         var partner: Chara? = null
+        val goals = HashSet<String>()
     }
 
     // ---------------- 状態 ----------------
@@ -263,7 +265,8 @@ class MainActivity : Activity() {
                     o.optInt("rest", 0),
                     chs,
                     chal,
-                    o.optBoolean("love", false)
+                    o.optBoolean("love", false),
+                    o.optString("goal", "")
                 )
             )
             i++
@@ -394,10 +397,10 @@ class MainActivity : Activity() {
     // ---------------- 紹介ムービー ----------------
     // res/raw/intro_<NN>.mp4 があればキャラ決定時に再生する。無ければ何もせず次へ進む。
 
-    private fun introResFor(charaIndex: Int): Int {
-        val n = charaIndex + 1
-        val nn = if (n < 10) "0" + n else n.toString()
-        return resources.getIdentifier("intro_" + nn, "raw", packageName)
+    // ムービー名はキャラの基準画像名に紐づける（プレイヤーの並び順に依存させない）
+    // 例: あかり(chara_kid01) → res/raw/intro_chara_kid01.mp4
+    private fun introResFor(c: Chara): Int {
+        return resources.getIdentifier("intro_" + c.img, "raw", packageName)
     }
 
     private fun playIntro(resId: Int, after: () -> Unit) {
@@ -490,7 +493,7 @@ class MainActivity : Activity() {
                 item.setOnClickListener {
                     picked.add(idx)
                     players.add(Player(c, false))
-                    playIntro(introResFor(idx)) { showCharaSelect(index + 1) }
+                    playIntro(introResFor(c)) { showCharaSelect(index + 1) }
                 }
             }
             row!!.addView(item)
@@ -612,6 +615,7 @@ class MainActivity : Activity() {
             val pt = p.partner
             val cr = p.crush
             if (pt != null) extra = "\n♥" + pt.name else if (cr != null) extra = "\n…" + cr.name
+            if (p.goals.size > 0) extra = extra + "\n★" + p.goals.size
             t2.text = "べ" + p.st + " う" + p.sp + " に" + p.pp + "\n¥" + p.mn + extra
             i++
         }
@@ -807,6 +811,23 @@ class MainActivity : Activity() {
             return
         }
 
+        if (cell.type == "AGAIN") {
+            applyDelta(p, cell.d)
+            val dt0 = deltaText(cell.d)
+            val b0 = if (dt0.isEmpty()) cell.text else cell.text + "\n" + dt0
+            message(cell.title, b0 + "\n\nもう いちど ルーレットを まわせる！") { afterCell(p, cell, allowChain) }
+            return
+        }
+
+        if (cell.type == "RANDOM" && cell.choices.size >= 2) {
+            val c = cell.choices[Random.nextInt(cell.choices.size)]
+            applyDelta(p, c.d)
+            message(cell.title, cell.text + "\n\n" + c.label + "：" + c.text + "\n" + deltaText(c.d)) {
+                afterCell(p, cell, allowChain)
+            }
+            return
+        }
+
         if (cell.type == "CRUSH") {
             applyDelta(p, cell.d)
             doCrush(p, cell) { afterCell(p, cell, allowChain) }
@@ -834,6 +855,11 @@ class MainActivity : Activity() {
             val head = who + cell.text + "\n\n" + statLabel(ch.stat) + " " + v + " / ひつよう " + ch.need
             var body = head + "\n\n" + (if (ok) ch.okText else ch.ngText) + "\n" + deltaText(d)
             if (cell.love && ok && cr != null) body = body + "\n\n" + cr.name + " と こいびとに なった！"
+            if (ok && cell.goalKey.isNotEmpty() && !p.goals.contains(cell.goalKey)) {
+                p.goals.add(cell.goalKey)
+                updateStats()
+                body = body + "\n\n★ もくひょう たっせい： " + goalLabel(cell.goalKey)
+            }
             message(cell.title, body) { afterCell(p, cell, allowChain) }
             return
         }
@@ -851,6 +877,10 @@ class MainActivity : Activity() {
     }
 
     private fun afterCell(p: Player, cell: Cell, allowChain: Boolean) {
+        if (cell.type == "AGAIN" && allowChain && !p.done) {
+            handler.postDelayed({ beginTurn() }, 300)
+            return
+        }
         if (cell.move != 0 && allowChain) {
             val to = clampPos(p.pos + cell.move)
             handler.postDelayed({ slideTo(p, to) }, 250)
@@ -884,6 +914,28 @@ class MainActivity : Activity() {
         return p.st
     }
 
+    private val goalKeys = listOf("exam", "sports", "love")
+
+    private fun goalLabel(key: String): String {
+        if (key == "exam") return "じゅけん せいこう"
+        if (key == "sports") return "たいかい ゆうしょう"
+        if (key == "love") return "こいびとが できる"
+        return key
+    }
+
+    private fun goalLine(p: Player): String {
+        val sb = StringBuilder()
+        var i = 0
+        while (i < goalKeys.size) {
+            val k = goalKeys[i]
+            sb.append(if (p.goals.contains(k)) "★" else "☆")
+            sb.append(goalLabel(k))
+            if (i < goalKeys.size - 1) sb.append("　")
+            i++
+        }
+        return sb.toString()
+    }
+
     private fun statLabel(key: String): String {
         if (key == "sp") return "うんどう"
         if (key == "pp") return "にんき"
@@ -896,6 +948,7 @@ class MainActivity : Activity() {
     private fun score(p: Player): Int {
         var v = p.st * 3 + p.sp * 3 + p.pp * 3 + p.mn / 200
         if (p.partner != null) v += 15
+        v += p.goals.size * 20
         return v
     }
 
@@ -956,6 +1009,9 @@ class MainActivity : Activity() {
             t3.gravity = Gravity.LEFT
             col.addView(t1)
             col.addView(t2)
+            val tg = label(goalLine(p), 12f, Color.parseColor("#8A6D3B"))
+            tg.gravity = Gravity.LEFT
+            col.addView(tg)
             col.addView(t3)
             val pt = p.partner
             if (pt != null) {

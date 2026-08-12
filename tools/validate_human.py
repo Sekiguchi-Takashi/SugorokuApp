@@ -36,12 +36,16 @@ if cells[-1]["type"] != "GOAL":
     errors.append("last cell must be GOAL")
 
 # 4. type-specific required fields
-VALID = {"START", "GOAL", "NORMAL", "GOOD", "BAD", "WARP", "REST", "CHOICE", "CHALLENGE", "CRUSH"}
+VALID = {"START", "GOAL", "NORMAL", "GOOD", "BAD", "WARP", "REST", "CHOICE", "CHALLENGE", "CRUSH", "AGAIN", "RANDOM"}
 for c in cells:
     if c["type"] not in VALID:
         errors.append("unknown type at %d: %s" % (c["i"], c["type"]))
-    if c["type"] == "CHOICE" and len(c.get("choices", [])) < 2:
-        errors.append("CHOICE needs 2 choices at %d" % c["i"])
+    if c["type"] in ("CHOICE", "RANDOM") and len(c.get("choices", [])) < 2:
+        errors.append("%s needs 2 choices at %d" % (c["type"], c["i"]))
+    if c.get("goal") and c["goal"] not in ("exam", "sports", "love"):
+        errors.append("unknown goal key at %d: %s" % (c["i"], c["goal"]))
+    if c.get("goal") and c["type"] not in ("CHALLENGE",):
+        errors.append("goal must be on a CHALLENGE cell at %d" % c["i"])
     if c["type"] == "CHALLENGE":
         for k in ("stat", "need", "ok", "ng"):
             if k not in c:
