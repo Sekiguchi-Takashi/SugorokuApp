@@ -2,7 +2,7 @@
 
 ## このファイルについて
 **新しいチャットの冒頭でこれを渡せば、そのまま開発を再開できる。**
-併せて最新の納品ZIP（`SugorokuApp_v5.6-A.zip`）をアップロードすること。
+併せて最新の納品ZIP（`SugorokuApp_v5.6.1-A.zip`）をアップロードすること。
 チャットのコンテナにはファイルが残らないため、ZIPが無いと作業を続けられない。
 
 ## 概要
@@ -21,7 +21,7 @@
 | ビルド | `gradle :app:assembleDebug` | `gradle :bside:assembleDebug` |
 | 検証 | `python3 tools/validate.py` | `python3 tools/validate.py bside` |
 
-- 現在バージョン: **A面 v5.6-A** / **B面 v1.1-B**
+- 現在バージョン: **A面 v5.6.1-A** / **B面 v1.1-B**
 - minSdk 26 / targetSdk 34
 
 ## 現在の状態（どこまで出来ているか）
@@ -67,7 +67,7 @@
 ## 構成
 ```
 SugorokuApp/
-├── .github/workflows/build.yml   # gradle assembleDebug → APK artifact
+├── .github/workflows/build.yml   # 1ファイル2ジョブ（app / bside）→ APK artifact 2つ
 ├── build.gradle.kts / settings.gradle.kts
 ├── debug.keystore
 └── app/
@@ -126,6 +126,17 @@ SugorokuApp/
 | 最終スコア | 中央251（30〜456） |
 
 `shared.exam.baseRate = 0` にしたので、**勉強の値がそのまま合格率(%)**になる分かりやすい設計。こくはくは `baseRate 35 + モテモテ`。
+
+## v5.6.1-A: CIを1ワークフローに統合
+
+**症状**: 1回 push するたびに Actions に run が2本（Build APK / Build B-side APK）立っていた。
+**原因**: `build.yml` と `build_bside.yml` の2ファイルが どちらも `on: push` だったため。pushが2回起きていたわけではない。
+
+**対応**: `build_bside.yml` を削除し、`build.yml` を **1ファイル2ジョブ**（`app` / `bside`）にまとめた。run は1本、ジョブは並列で走り、APKは従来どおり2つ artifact に出る。
+
+- ジョブを分けたまま（1ジョブで両方ビルドしない）にしたのは、**A面が落ちてもB面のビルド結果が得られる**ようにするため。「干渉しない」という2アプリ構成の方針と合わせてある
+- `paths:` フィルタで振り分ける案もあったが、`build.gradle.kts` や `tools/` など共有ファイルを触ると結局両方走るので採らなかった
+- **差分ZIPではファイル削除ができない**ので、展開後に `git rm .github/workflows/build_bside.yml` を実行すること
 
 ## v5.6-A / v1.1-B: 1回休みマス と 選択肢イベント
 
