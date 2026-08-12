@@ -10,6 +10,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
@@ -33,6 +34,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import android.widget.VideoView
 import org.json.JSONObject
 import kotlin.math.abs
@@ -91,6 +93,16 @@ class MainActivity : Activity() {
     // ---------------- 状態 ----------------
 
     private val handler = Handler(Looper.getMainLooper())
+
+    // ---- テンポ（A面 SugorokuApp と同じ値）----
+    object Speed {
+        var fast = false
+        val spinMs get() = if (fast) 1100L else 2600L
+        val stepMs get() = if (fast) 140L else 300L
+        val resultMs get() = if (fast) 300L else 700L
+        val cpuWaitMs get() = if (fast) 400L else 1000L
+        val eventWaitMs get() = if (fast) 350L else 700L
+    }
     private var charas: List<Chara> = ArrayList()
     private var partners: List<Chara> = ArrayList()
     private var cells: List<Cell> = ArrayList()
@@ -114,6 +126,26 @@ class MainActivity : Activity() {
 
     private fun dp(v: Float): Float = v * resources.displayMetrics.density
     private fun dpi(v: Float): Int = dp(v).toInt()
+
+    private fun roundedBg(fill: Int, stroke: Int = 0): GradientDrawable {
+        val g = GradientDrawable()
+        g.setColor(fill)
+        g.cornerRadius = dp(10f)
+        if (stroke != 0) g.setStroke(dpi(2f), stroke)
+        return g
+    }
+
+    private fun styledButton(labelText: String, size: Float, fill: Int): Button {
+        val b = Button(this)
+        b.text = labelText
+        b.textSize = size
+        b.minHeight = 0
+        b.minimumHeight = 0
+        b.setTextColor(Color.WHITE)
+        b.background = roundedBg(fill)
+        b.setPadding(dpi(8f), dpi(10f), dpi(8f), dpi(10f))
+        return b
+    }
 
     // ---------------- ライフステージ別の画像解決 ----------------
     // images に無いステージは近いステージへフォールバック。
@@ -538,6 +570,17 @@ class MainActivity : Activity() {
 
     // ---------------- ゲーム画面 ----------------
 
+    private var statusText2: TextView? = null
+    private var speedButton: Button? = null
+    private var startButton: Button? = null
+
+    private fun updateSpeedLabel() {
+        speedButton?.text = if (Speed.fast) "はやさ: はやい⚡" else "はやさ: ふつう"
+        speedButton?.background = roundedBg(
+            if (Speed.fast) Color.parseColor("#EF6C00") else Color.parseColor("#78909C")
+        )
+    }
+
     private fun startGame() {
         turn = 0
         goalCount = 0
@@ -547,13 +590,42 @@ class MainActivity : Activity() {
         root.orientation = LinearLayout.VERTICAL
         root.setBackgroundColor(Color.parseColor("#FFF6E5"))
 
+        // 情報行（ステージ名・凡例）＋ はやさ切替
+        val infoRow = LinearLayout(this)
+        infoRow.orientation = LinearLayout.HORIZONTAL
+        infoRow.gravity = Gravity.CENTER_VERTICAL
+        infoRow.setPadding(dpi(12f), dpi(4f), dpi(12f), 0)
+
         val st = TextView(this)
-        st.textSize = 15f
-        st.setTextColor(Color.parseColor("#2F3E46"))
-        st.setPadding(dpi(12f), dpi(8f), dpi(12f), dpi(4f))
-        st.setTypeface(Typeface.DEFAULT_BOLD)
+        st.textSize = 11f
+        st.setTextColor(Color.parseColor("#558B2F"))
         statusText = st
-        root.addView(st)
+        infoRow.addView(st, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+
+        val sb2 = Button(this)
+        sb2.textSize = 12f
+        sb2.minHeight = 0
+        sb2.minimumHeight = 0
+        sb2.setTextColor(Color.WHITE)
+        sb2.setPadding(dpi(10f), dpi(5f), dpi(10f), dpi(5f))
+        sb2.setOnClickListener {
+            Speed.fast = !Speed.fast
+            updateSpeedLabel()
+        }
+        speedButton = sb2
+        updateSpeedLabel()
+        infoRow.addView(sb2)
+        root.addView(infoRow)
+
+        // 手番の見出し
+        val st2 = TextView(this)
+        st2.textSize = 17f
+        st2.gravity = Gravity.CENTER
+        st2.setTextColor(Color.parseColor("#33691E"))
+        st2.setTypeface(Typeface.DEFAULT_BOLD)
+        st2.setPadding(dpi(8f), dpi(2f), dpi(8f), dpi(2f))
+        statusText2 = st2
+        root.addView(st2)
 
         val bv = BoardView(this)
         bv.layoutParams = LinearLayout.LayoutParams(
@@ -562,37 +634,83 @@ class MainActivity : Activity() {
         boardView = bv
         root.addView(bv)
 
-        val sb = LinearLayout(this)
-        sb.orientation = LinearLayout.HORIZONTAL
-        sb.setPadding(dpi(8f), dpi(6f), dpi(8f), dpi(2f))
-        statsBox = sb
-        root.addView(sb)
-
         val lg = TextView(this)
-        lg.textSize = 13f
+        lg.textSize = 12f
         lg.setTextColor(Color.parseColor("#52616B"))
-        lg.setPadding(dpi(12f), dpi(2f), dpi(12f), dpi(4f))
+        lg.setPadding(dpi(12f), dpi(2f), dpi(12f), dpi(2f))
         lg.minLines = 2
         logText = lg
         root.addView(lg)
 
-        val bottom = FrameLayout(this)
-        bottom.layoutParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, dpi(150f)
-        )
+        // ルーレットとスタートボタン
+        val controlRow = LinearLayout(this)
+        controlRow.orientation = LinearLayout.HORIZONTAL
+        controlRow.setPadding(dpi(8f), 0, dpi(8f), dpi(4f))
+
         val rv = RouletteView(this)
-        val rlp = FrameLayout.LayoutParams(dpi(140f), dpi(140f))
-        rlp.gravity = Gravity.CENTER
-        rv.layoutParams = rlp
         rv.onResult = { n -> onSpinResult(n) }
         roulette = rv
-        bottom.addView(rv)
-        root.addView(bottom)
+        controlRow.addView(rv, LinearLayout.LayoutParams(0, dpi(200f), 1.3f))
+
+        val buttonCol = LinearLayout(this)
+        buttonCol.orientation = LinearLayout.VERTICAL
+        buttonCol.gravity = Gravity.CENTER
+        buttonCol.setPadding(dpi(8f), 0, dpi(4f), 0)
+
+        val sbtn = Button(this)
+        sbtn.text = "スタート！"
+        sbtn.textSize = 20f
+        sbtn.setTypeface(Typeface.DEFAULT_BOLD)
+        sbtn.setTextColor(Color.WHITE)
+        sbtn.background = roundedBg(Color.parseColor("#FF9800"))
+        sbtn.setPadding(dpi(8f), dpi(20f), dpi(8f), dpi(20f))
+        sbtn.setOnClickListener { roulette?.pressStart() }
+        startButton = sbtn
+        buttonCol.addView(sbtn, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+
+        val stbtn = styledButton("ステータス", 15f, Color.parseColor("#4CAF50"))
+        stbtn.setOnClickListener { showStatusDialog() }
+        val slp = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        slp.topMargin = dpi(12f)
+        buttonCol.addView(stbtn, slp)
+
+        controlRow.addView(buttonCol, LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        root.addView(controlRow)
+
+        // 下部のステータスバー
+        val sb = LinearLayout(this)
+        sb.orientation = LinearLayout.HORIZONTAL
+        sb.setBackgroundColor(Color.parseColor("#33691E"))
+        sb.setPadding(dpi(8f), dpi(5f), dpi(8f), dpi(5f))
+        statsBox = sb
+        root.addView(sb)
 
         setContentView(root)
         buildStatsBox()
         log("ゲームスタート！")
         beginTurn()
+    }
+
+    private fun showStatusDialog() {
+        val sb = StringBuilder()
+        var i = 0
+        while (i < players.size) {
+            val p = players[i]
+            val who = if (p.cpu) "（CPU）" else "（" + (i + 1) + "P）"
+            sb.append(p.chara.name).append(who).append("\n")
+            sb.append("  べんきょう ").append(p.st).append(" / うんどう ").append(p.sp)
+            sb.append(" / にんき ").append(p.pp).append(" / ¥").append(p.mn).append("\n")
+            val pt = p.partner
+            if (pt != null) sb.append("  ♥ ").append(pt.name).append("\n")
+            sb.append("  ").append(goalLine(p)).append("\n\n")
+            i++
+        }
+        AlertDialog.Builder(this).setTitle("ステータス")
+            .setMessage(sb.toString().trim())
+            .setPositiveButton("とじる", null).show()
     }
 
     private fun buildStatsBox() {
@@ -606,8 +724,8 @@ class MainActivity : Activity() {
             box.gravity = Gravity.CENTER
             val lp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             box.layoutParams = lp
-            val t1 = label("", 13f, Color.parseColor("#2F3E46"))
-            val t2 = label("", 11f, Color.parseColor("#52616B"))
+            val t1 = label("", 12f, Color.WHITE)
+            val t2 = label("", 10f, Color.parseColor("#DCEDC8"))
             box.addView(t1)
             box.addView(t2)
             box.tag = arrayOf(t1, t2)
@@ -660,8 +778,12 @@ class MainActivity : Activity() {
     private fun updateStatus() {
         val p = players[turn]
         val who = if (p.cpu) "CPU" else (turn + 1).toString() + "P"
-        statusText?.text = stageName(p.pos) + " ／ " + who + "・" + p.chara.name +
-                " の ばん（" + (p.pos + 1) + " / " + cells.size + "マス）"
+        val si = stageIndexAt(p.pos)
+        statusText?.text = "ステージ" + (si + 1) + "/" + stages.size + "「" + stageName(p.pos) + "」\n" +
+                "🟢いいこと 🟣わるいこと 🟠ワープ 🔴ちょうせん 🩷こくはく"
+        statusText2?.text = who + "・" + p.chara.name + " の ばん（" + (p.pos + 1) + " / " + cells.size + "マス）"
+        startButton?.isEnabled = !p.cpu
+        startButton?.alpha = if (p.cpu) 0.4f else 1f
         updateStats()
     }
 
@@ -682,12 +804,12 @@ class MainActivity : Activity() {
         if (p.rest > 0) {
             p.rest--
             log(p.chara.name + " は おやすみ中")
-            handler.postDelayed({ nextTurn() }, 900)
+            handler.postDelayed({ nextTurn() }, 600)
             return
         }
         if (p.cpu) {
             roulette?.lock()
-            handler.postDelayed({ roulette?.autoSpin() }, 800)
+            handler.postDelayed({ roulette?.autoSpin() }, Speed.cpuWaitMs)
         } else {
             roulette?.unlock()
         }
@@ -712,14 +834,14 @@ class MainActivity : Activity() {
 
     private fun stepMove(p: Player, remain: Int) {
         if (remain <= 0 || p.pos >= cells.size - 1 || p.pos >= stageLimit(p.pos)) {
-            handler.postDelayed({ onLanded(p, true) }, 200)
+            handler.postDelayed({ onLanded(p, true) }, 150)
             return
         }
         p.pos++
         boardView?.focus(p.pos)
         boardView?.invalidate()
         updateStatus()
-        handler.postDelayed({ stepMove(p, remain - 1) }, 220)
+        handler.postDelayed({ stepMove(p, remain - 1) }, Speed.stepMs)
     }
 
     private fun applyDelta(p: Player, d: Delta) {
@@ -746,39 +868,92 @@ class MainActivity : Activity() {
         return if (v >= 0) "+" + v else v.toString()
     }
 
+    // タップ不要でそのまま進む結果表示（トースト＋ログ）
+    private fun flash(title: String, body: String, after: () -> Unit) {
+        log("[" + title + "] " + body.replace("\n", " "))
+        statusText2?.text = title
+        if (!players[turn].cpu) {
+            Toast.makeText(this, body, Toast.LENGTH_SHORT).show()
+        }
+        handler.postDelayed({ after() }, if (players[turn].cpu) Speed.cpuWaitMs else Speed.resultMs)
+    }
+
     private fun message(title: String, body: String, after: () -> Unit) {
         val p = players[turn]
         if (p.cpu) {
-            log("[" + title + "] " + body)
-            handler.postDelayed({ after() }, 1200)
+            log("[" + title + "] " + body.replace("\n", " "))
+            statusText2?.text = p.chara.name + "：" + title
+            handler.postDelayed({ after() }, Speed.cpuWaitMs)
             return
         }
-        val b = AlertDialog.Builder(this)
-        b.setTitle(title)
-        b.setCancelable(false)
+
+        val content = LinearLayout(this)
+        content.orientation = LinearLayout.VERTICAL
+        content.setPadding(dpi(12f), dpi(12f), dpi(12f), dpi(12f))
+
         val rid = if (currentBg.isEmpty()) 0 else resources.getIdentifier(currentBg, "drawable", packageName)
         if (rid != 0) {
-            val col = LinearLayout(this)
-            col.orientation = LinearLayout.VERTICAL
+            val frame = FrameLayout(this)
             val iv = ImageView(this)
             iv.setImageResource(rid)
-            iv.scaleType = ImageView.ScaleType.CENTER_CROP
-            iv.layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dpi(150f)
-            )
-            col.addView(iv)
-            val tv = TextView(this)
-            tv.text = body
-            tv.textSize = 15f
-            tv.setTextColor(Color.parseColor("#2F3E46"))
-            tv.setPadding(dpi(20f), dpi(14f), dpi(20f), dpi(4f))
-            col.addView(tv)
-            b.setView(col)
-        } else {
-            b.setMessage(body)
+            iv.scaleType = ImageView.ScaleType.FIT_CENTER
+            iv.adjustViewBounds = true
+            frame.addView(iv, FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+
+            val row = LinearLayout(this)
+            row.orientation = LinearLayout.HORIZONTAL
+            row.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+
+            val key = stageKeyAt(p.pos)
+            val me = ImageView(this)
+            me.setImageResource(charaRes(p.chara, key, ""))
+            me.rotation = 3f
+            val mlp = LinearLayout.LayoutParams(dpi(108f), dpi(108f))
+            mlp.bottomMargin = dpi(6f)
+            mlp.leftMargin = dpi(2f)
+            mlp.rightMargin = dpi(2f)
+            row.addView(me, mlp)
+
+            val pt = p.partner
+            val cr = p.crush
+            val mate = pt ?: cr
+            if (mate != null) {
+                val mv = ImageView(this)
+                mv.setImageResource(charaRes(mate, key, ""))
+                mv.rotation = -4f
+                val plp = LinearLayout.LayoutParams(dpi(100f), dpi(100f))
+                plp.bottomMargin = dpi(6f)
+                plp.leftMargin = dpi(2f)
+                plp.rightMargin = dpi(2f)
+                row.addView(mv, plp)
+            }
+
+            frame.addView(row, FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
+            content.addView(frame)
         }
-        b.setPositiveButton("OK") { _, _ -> after() }
-        b.show()
+
+        val tv = TextView(this)
+        tv.text = body
+        tv.textSize = 16f
+        tv.setTextColor(Color.parseColor("#263238"))
+        tv.setPadding(dpi(14f), dpi(12f), dpi(14f), dpi(12f))
+        tv.background = roundedBg(Color.WHITE, Color.parseColor("#33691E"))
+        val tlp = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        tlp.topMargin = dpi(10f)
+        content.addView(tv, tlp)
+
+        val sv = ScrollView(this)
+        sv.addView(content)
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setView(sv)
+            .setCancelable(false)
+            .setPositiveButton("OK") { _, _ -> after() }
+            .show()
     }
 
     private fun doCrush(p: Player, cell: Cell, after: () -> Unit) {
@@ -803,7 +978,7 @@ class MainActivity : Activity() {
             val c = pool[Random.nextInt(pool.size)]
             p.crush = c
             updateStats()
-            message(cell.title, cell.text + "\n\n" + c.name + " が きに なるみたい。") { after() }
+            flash(cell.title, c.name + " が きに なるみたい") { after() }
         } else {
             val names = Array<CharSequence>(pool.size) { k -> pool[k].name }
             val b = AlertDialog.Builder(this)
@@ -813,7 +988,7 @@ class MainActivity : Activity() {
                 val c = pool[which]
                 p.crush = c
                 updateStats()
-                message(cell.title, c.name + " のことが きに なりはじめた。\n\nこうこうの「こくはく」で にんきが たりれば こいびとに なれる。") { after() }
+                flash(cell.title, c.name + " が きに なりはじめた") { after() }
             }
             b.show()
         }
@@ -848,7 +1023,7 @@ class MainActivity : Activity() {
                     " を ぬけた！\n\nみんなで " + nextName + " へ すすむ。"
             message(cell.title, body) {
                 advanceStage(si)
-                handler.postDelayed({ nextTurn() }, 300)
+                handler.postDelayed({ nextTurn() }, 250)
             }
             return
         }
@@ -865,7 +1040,7 @@ class MainActivity : Activity() {
             if (p.cpu) {
                 val c = cell.choices[Random.nextInt(cell.choices.size)]
                 applyDelta(p, c.d)
-                message(cell.title, c.label + "：" + c.text + "\n" + deltaText(c.d)) { afterCell(p, cell, allowChain) }
+                flash(cell.title, c.label + "：" + c.text + "\n" + deltaText(c.d)) { afterCell(p, cell, allowChain) }
             } else {
                 val b = AlertDialog.Builder(this)
                 b.setTitle(cell.title)
@@ -874,12 +1049,12 @@ class MainActivity : Activity() {
                 b.setPositiveButton(cell.choices[0].label) { _, _ ->
                     val c = cell.choices[0]
                     applyDelta(p, c.d)
-                    message(cell.title, c.text + "\n" + deltaText(c.d)) { afterCell(p, cell, allowChain) }
+                    flash(cell.title, c.text + "\n" + deltaText(c.d)) { afterCell(p, cell, allowChain) }
                 }
                 b.setNegativeButton(cell.choices[1].label) { _, _ ->
                     val c = cell.choices[1]
                     applyDelta(p, c.d)
-                    message(cell.title, c.text + "\n" + deltaText(c.d)) { afterCell(p, cell, allowChain) }
+                    flash(cell.title, c.text + "\n" + deltaText(c.d)) { afterCell(p, cell, allowChain) }
                 }
                 b.show()
             }
@@ -897,7 +1072,7 @@ class MainActivity : Activity() {
         if (cell.type == "RANDOM" && cell.choices.size >= 2) {
             val c = cell.choices[Random.nextInt(cell.choices.size)]
             applyDelta(p, c.d)
-            message(cell.title, cell.text + "\n\n" + c.label + "：" + c.text + "\n" + deltaText(c.d)) {
+            message(cell.title, cell.text + "\n\n" + c.label + "\n" + c.text + "\n" + deltaText(c.d)) {
                 afterCell(p, cell, allowChain)
             }
             return
@@ -945,7 +1120,7 @@ class MainActivity : Activity() {
         val body = if (dt.isEmpty()) cell.text else cell.text + "\n" + dt
         if (cell.type == "NORMAL" && dt.isEmpty()) {
             log("[" + cell.title + "] " + cell.text)
-            handler.postDelayed({ afterCell(p, cell, allowChain) }, 700)
+            handler.postDelayed({ afterCell(p, cell, allowChain) }, Speed.eventWaitMs)
         } else {
             message(cell.title, body) { afterCell(p, cell, allowChain) }
         }
@@ -953,7 +1128,7 @@ class MainActivity : Activity() {
 
     private fun afterCell(p: Player, cell: Cell, allowChain: Boolean) {
         if (cell.type == "AGAIN" && allowChain && !p.done) {
-            handler.postDelayed({ beginTurn() }, 300)
+            handler.postDelayed({ beginTurn() }, 250)
             return
         }
         if (cell.move != 0 && allowChain) {
@@ -961,7 +1136,7 @@ class MainActivity : Activity() {
             handler.postDelayed({ slideTo(p, to) }, 250)
             return
         }
-        handler.postDelayed({ nextTurn() }, 250)
+        handler.postDelayed({ nextTurn() }, 200)
     }
 
     private fun clampPos(v: Int): Int {
@@ -979,7 +1154,7 @@ class MainActivity : Activity() {
         boardView?.focus(p.pos)
         boardView?.invalidate()
         updateStatus()
-        handler.postDelayed({ slideTo(p, to) }, 200)
+        handler.postDelayed({ slideTo(p, to) }, Speed.stepMs)
     }
 
     private fun statOf(p: Player, key: String): Int {
@@ -1390,6 +1565,11 @@ class MainActivity : Activity() {
             spin()
         }
 
+        fun pressStart() {
+            if (locked || spinning) return
+            spin()
+        }
+
         override fun onTouchEvent(e: MotionEvent): Boolean {
             if (e.action == MotionEvent.ACTION_DOWN && !locked && !spinning) {
                 spin()
@@ -1409,7 +1589,7 @@ class MainActivity : Activity() {
             if (delta < 0f) delta += 360f
             val end = rot + 1440f + delta
             val an = ValueAnimator.ofFloat(rot, end)
-            an.duration = 2100
+            an.duration = Speed.spinMs
             an.interpolator = DecelerateInterpolator(1.8f)
             an.addUpdateListener { a ->
                 rot = a.animatedValue as Float
@@ -1461,7 +1641,7 @@ class MainActivity : Activity() {
             canvas.drawCircle(cx, cy, r * 0.3f, p)
             p.color = Color.parseColor("#3A5A40")
             p.textSize = dp(13f)
-            val ctr = if (spinning) "..." else if (locked) "まて" else "タップ"
+            val ctr = if (spinning) "..." else if (locked) "..." else "スタート"
             canvas.drawText(ctr, cx, cy + dp(5f), p)
 
             // 上部のポインタ
