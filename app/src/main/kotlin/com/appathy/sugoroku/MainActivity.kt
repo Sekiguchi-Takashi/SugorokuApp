@@ -52,6 +52,10 @@ class MainActivity : Activity() {
         var hasLover: Boolean = false,   // こくはくに成功したか
         var skipNext: Boolean = false,   // つぎの じぶんの番を1回休む
         var stageWins: Int = 0,          // ステージ1着の かず（勝敗の どうてん判定に使う）
+        // ここから下は「おもいでしょう」（称号）のための かぞえ。てんすうには ひびかない
+        var backSteps: Int = 0,          // もどったマスの合計
+        var restCount: Int = 0,          // おやすみした かず
+        var braveCount: Int = 0,         // 選択肢で もどるほうを えらんだ かず
         val skills: MutableSet<String> = HashSet()   // 取得済みスキルのid
     ) {
         val total: Int get() = manpuku + juujitsu + yuujou
@@ -1182,6 +1186,7 @@ class MainActivity : Activity() {
         // 1回休み: フラグを消して この手番は とばす（全員が休んでも消えるので止まらない）
         if (p.skipNext) {
             p.skipNext = false
+            p.restCount++
             boardView.turnIndex = turn
             boardView.world = p.inCave
             boardView.snapToCell(p.position)
@@ -1453,6 +1458,30 @@ class MainActivity : Activity() {
     }
 
     /**
+     * 「おもいでしょう」。てんすうには ひびかない、わらうための しょう。
+     * ぜんいん0の しょうは 出さない。
+     */
+    private fun memoryAwards(): List<String> {
+        val out = ArrayList<String>()
+        addAward(out, "🍌", "ドジっこしょう", "もどったマス ") { it.backSteps }
+        addAward(out, "😴", "ねぼすけしょう", "おやすみ ") { it.restCount }
+        addAward(out, "🔥", "ぼうけんかしょう", "きけんな みちを ") { it.braveCount }
+        addAward(out, "🚩", "いちばんのりしょう", "1ちゃく ") { it.stageWins }
+        return out
+    }
+
+    /** 1つ分の しょうを 足す。1位が0なら 出さない。どうてんは 連名にする */
+    private fun addAward(
+        out: ArrayList<String>, icon: String, name: String, note: String, value: (Player) -> Int
+    ) {
+        val best = players.maxByOrNull { value(it) } ?: return
+        val v = value(best)
+        if (v <= 0) return
+        val names = players.filter { value(it) == v }.joinToString("と") { who(it) }
+        out.add("${icon} ${name} … ${names}（${note}${v}）")
+    }
+
+    /**
      * 最終結果。だれが勝ったかを 先頭に大きく出す。
      * 勝敗は スコア → ステージ1着の かず の順で決め、
      * どちらも同じなら ひきわけ にする（ゴール順では決めない）。
@@ -1520,6 +1549,11 @@ class MainActivity : Activity() {
             }
             sb.append("\n")
         }
+        val awards = memoryAwards()
+        if (awards.isNotEmpty()) {
+            sb.append("\n【 おもいでしょう 】\n")
+            for (a in awards) sb.append("${a}\n")
+        }
         val title = if (mode == GameMode.SCHOOL) "🎓 そつぎょう おめでとう！" else "🏆 ぜんステージ クリア！"
         AlertDialog.Builder(this)
             .setTitle(title)
@@ -1533,6 +1567,7 @@ class MainActivity : Activity() {
                     it.money = jobsData.startMoney; it.jobId = "none"; it.skills.clear()
                     it.passedExam = false; it.hasLover = false; it.examTries = 0
                     it.stageWins = 0
+                    it.backSteps = 0; it.restCount = 0; it.braveCount = 0
                 }
                 stageIndex = 0
                 turn = 0
@@ -1860,6 +1895,7 @@ class MainActivity : Activity() {
     private fun applyOutcome(
         p: Player, d1: Int, d2: Int, d3: Int, dMove: Int, skip: Boolean, kind: EventKind
     ) {
+        if (dMove < 0) p.backSteps += -dMove
         p.manpuku = (p.manpuku + gain(p, d1)).coerceIn(0, 999)
         p.juujitsu = (p.juujitsu + gain(p, d2)).coerceIn(0, 999)
         p.yuujou = (p.yuujou + gain(p, d3)).coerceIn(0, 999)
@@ -1930,6 +1966,7 @@ class MainActivity : Activity() {
             .setView(ScrollView(this).apply { addView(content) })
             .setCancelable(false)
             .setPositiveButton("OK") { _, _ ->
+                if (c.dMove < 0) p.braveCount++
                 applyOutcome(p, c.dManpuku, c.dJuujitsu, c.dYuujou, c.dMove, c.skipTurn, ev.kind)
             }
             .show()
