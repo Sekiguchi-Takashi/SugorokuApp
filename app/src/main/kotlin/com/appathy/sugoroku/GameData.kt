@@ -169,7 +169,8 @@ object GameData {
             // 1回休み・選択肢
             skipTurn = if (o.has("skip")) o.optBoolean("skip", false)
                        else base?.optBoolean("skip", false) ?: false,
-            choices = parseChoices(context, o.optJSONArray("choices"))
+            choices = parseChoices(context, o.optJSONArray("choices")),
+            itemId = str("item", "")
         )
     }
 
@@ -196,7 +197,8 @@ object GameData {
                     dJuujitsu = o.optInt("juujitsu", 0),
                     dYuujou = o.optInt("yuujou", 0),
                     dMove = o.optInt("move", 0),
-                    skipTurn = o.optBoolean("skip", false)
+                    skipTurn = o.optBoolean("skip", false),
+                    itemId = o.optString("item", "")
                 )
             )
         }
@@ -417,6 +419,31 @@ object GameData {
         val desc: String
     )
 
+    /** もちもの1種類の定義（items.json） */
+    data class ItemDef(
+        val id: String,
+        val name: String,
+        val icon: String,
+        val desc: String,
+        /** "self" = 自分に使う / "other" = 先頭の相手に使う */
+        val target: String,
+        val useMessage: String,
+        val dMove: Int,
+        val dManpuku: Int,
+        val dJuujitsu: Int,
+        val dYuujou: Int,
+        val boost: Int,
+        val guard: Boolean,
+        val swap: Boolean
+    )
+
+    data class ItemsData(
+        val maxHold: Int,
+        val unusedScore: Int,
+        val items: List<ItemDef>,
+        val warnings: List<String>
+    )
+
     data class JobsData(
         val startMoney: Int,
         val skills: List<SkillDef>,
@@ -428,6 +455,63 @@ object GameData {
      * assets/jobs.json を読む。読めなければ最低限の「むしょく」だけを持つデータを返し、
      * 職業システムが無効な状態でもゲームが成立するようにする。
      */
+    /**
+     * もちものを読む。読めなくてもゲームは成立するので、
+     * 失敗時は「もちもの無し」で返して起動だけは通す。
+     */
+    fun loadItems(context: Context): ItemsData {
+        val warnings = ArrayList<String>()
+        val raw = readJson(context, "items.json")
+        if (raw == null) {
+            warnings.add("items.json を読み込めませんでした")
+            return ItemsData(3, 5, emptyList(), warnings)
+        }
+        val root = try {
+            JSONObject(raw)
+        } catch (e: Exception) {
+            Log.e(TAG, "items.json のJSON構文が不正です", e)
+            warnings.add("items.json のJSON構文が不正です")
+            return ItemsData(3, 5, emptyList(), warnings)
+        }
+        if (root.optInt("schemaVersion", 0) != 1) warnings.add("items.json: 未対応のschemaVersion")
+        val list = ArrayList<ItemDef>()
+        val arr = root.optJSONArray("items")
+        if (arr != null) {
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i)
+                if (o == null) continue
+                val id = o.optString("id", "")
+                if (id.isBlank()) {
+                    warnings.add("items: id が空の項目があります")
+                    continue
+                }
+                list.add(
+                    ItemDef(
+                        id = id,
+                        name = o.optString("name", id),
+                        icon = o.optString("icon", "🎁"),
+                        desc = o.optString("desc", ""),
+                        target = o.optString("target", "self"),
+                        useMessage = o.optString("useMessage", ""),
+                        dMove = o.optInt("move", 0),
+                        dManpuku = o.optInt("manpuku", 0),
+                        dJuujitsu = o.optInt("juujitsu", 0),
+                        dYuujou = o.optInt("yuujou", 0),
+                        boost = o.optInt("boost", 0),
+                        guard = o.optBoolean("guard", false),
+                        swap = o.optBoolean("swap", false)
+                    )
+                )
+            }
+        }
+        return ItemsData(
+            root.optInt("maxHold", 3),
+            root.optInt("unusedScore", 5),
+            list,
+            warnings
+        )
+    }
+
     fun loadJobs(context: Context): JobsData {
         val warnings = ArrayList<String>()
         val fallback = JobsData(

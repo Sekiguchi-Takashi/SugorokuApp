@@ -52,11 +52,15 @@ class MainActivity : Activity() {
         var hasLover: Boolean = false,   // こくはくに成功したか
         var skipNext: Boolean = false,   // つぎの じぶんの番を1回休む
         var stageWins: Int = 0,          // ステージ1着の かず（勝敗の どうてん判定に使う）
+        var itemBoost: Int = 0,          // もちものによる 次のルーレット加算
+        var restGuard: Boolean = false,  // めざましどけい: おやすみを1回ふせぐ
+        var itemUsed: Int = 0,           // もちものを つかった かず
         // ここから下は「おもいでしょう」（称号）のための かぞえ。てんすうには ひびかない
         var backSteps: Int = 0,          // もどったマスの合計
         var restCount: Int = 0,          // おやすみした かず
         var braveCount: Int = 0,         // 選択肢で もどるほうを えらんだ かず
-        val skills: MutableSet<String> = HashSet()   // 取得済みスキルのid
+        val skills: MutableSet<String> = HashSet(),  // 取得済みスキルのid
+        val items: MutableList<String> = ArrayList() // もちもの（items.json の id）
     ) {
         val total: Int get() = manpuku + juujitsu + yuujou
     }
@@ -75,7 +79,9 @@ class MainActivity : Activity() {
         val dJuujitsu: Int = 0,
         val dYuujou: Int = 0,
         val dMove: Int = 0,
-        val skipTurn: Boolean = false
+        val skipTurn: Boolean = false,
+        /** えらぶと もらえる もちもの（items.json の id）。空なら なし */
+        val itemId: String = ""
     )
 
     data class GameEvent(
@@ -112,7 +118,9 @@ class MainActivity : Activity() {
         /** true なら このイベントのあと つぎの じぶんの番を1回休む */
         val skipTurn: Boolean = false,
         /** 空でなければ選択肢イベント。えらんだものの効果だけが起きる */
-        val choices: List<Choice> = emptyList()
+        val choices: List<Choice> = emptyList(),
+        /** もらえる もちもの（items.json の id）。空なら なし */
+        val itemId: String = ""
     )
 
     /** 1ステージ分の盤面定義 */
@@ -203,6 +211,14 @@ class MainActivity : Activity() {
     private var jobsData: GameData.JobsData =
         GameData.JobsData(100, emptyList(), emptyList(), emptyList())
 
+    /** もちもの（assets/items.json） */
+    private var itemsData: GameData.ItemsData =
+        GameData.ItemsData(3, 5, emptyList(), emptyList())
+
+    /** id から もちものの定義を引く */
+    private fun itemOf(id: String): GameData.ItemDef? =
+        itemsData.items.firstOrNull { it.id == id }
+
     /**
      * そのイベントが「損をする」ものか。
      * ステータスの合計がマイナス、または もどる ならbadとして紫で示す。
@@ -234,9 +250,10 @@ class MainActivity : Activity() {
             var s = p.total
             if (p.passedExam) s += Skill.EXAM_SCORE
             if (p.hasLover) s += Skill.LOVER_SCORE
+            s += p.items.size * itemsData.unusedScore
             return s
         }
-        var s = p.total + p.money / 10
+        var s = p.total + p.money / 10 + p.items.size * itemsData.unusedScore
         s += (jobOf(p.jobId)?.salary ?: 0) / 10
         s += p.skills.size * Skill.SKILL_SCORE
         if (p.married) s += Skill.MARRIED_SCORE
@@ -263,6 +280,10 @@ class MainActivity : Activity() {
         // 職業・スキル
         jobsData = GameData.loadJobs(this)
         warnings.addAll(jobsData.warnings)
+
+        // もちもの
+        itemsData = GameData.loadItems(this)
+        warnings.addAll(itemsData.warnings)
 
         // 本線ステージ（モードごとにファイルが変わる）
         val st = GameData.loadStages(this, mode.file)
@@ -304,6 +325,7 @@ class MainActivity : Activity() {
     private lateinit var startButton: Button
     private lateinit var statsBar: TextView
     private lateinit var manpukuSkillButton: Button
+    private lateinit var itemButton: Button
     private lateinit var juujitsuSkillButton: Button
 
     private val stage: Stage get() = stages[stageIndex]
@@ -915,6 +937,19 @@ class MainActivity : Activity() {
         skillRow.addView(juujitsuSkillButton, LinearLayout.LayoutParams(
             0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
         ).apply { leftMargin = dp(4) })
+        itemButton = Button(this).apply {
+            textSize = 12f
+            minHeight = 0
+            minimumHeight = 0
+            setTextColor(Color.WHITE)
+            background = roundedBg(Color.parseColor("#00838F"))
+            setPadding(dp(4), dp(8), dp(4), dp(8))
+            text = "🎒もちもの"
+            setOnClickListener { showItemDialog() }
+        }
+        skillRow.addView(itemButton, LinearLayout.LayoutParams(
+            0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+        ).apply { leftMargin = dp(4) })
         root.addView(skillRow)
 
         val controlRow = LinearLayout(this).apply {
@@ -1016,12 +1051,113 @@ class MainActivity : Activity() {
         juujitsuSkillButton.isEnabled = myTurn && p!!.juujitsu >= Skill.JUUJITSU_COST && canPushOthers(p)
         manpukuSkillButton.alpha = if (manpukuSkillButton.isEnabled) 1f else 0.4f
         juujitsuSkillButton.alpha = if (juujitsuSkillButton.isEnabled) 1f else 0.4f
+        if (::itemButton.isInitialized) {
+            val n = if (p == null) 0 else p.items.size
+            itemButton.text = if (n > 0) "🎒もちもの×${n}" else "🎒もちもの"
+            itemButton.isEnabled = myTurn && n > 0
+            itemButton.alpha = if (itemButton.isEnabled) 1f else 0.4f
+        }
+    }
+
+    /**
+     * もちものを つかう画面。自分の番で ルーレットを回す前に つかえる。
+     * 「あいて」に つかうものは、同じ世界の いちばん さきにいる 相手が ねらい。
+     */
+    private fun showItemDialog() {
+        val p = players.getOrNull(turn)
+        if (p == null || !p.isHuman || rouletteView.locked || p.items.isEmpty()) return
+        val defs = ArrayList<GameData.ItemDef>()
+        for (id in p.items) {
+            val def = itemOf(id)
+            if (def != null) defs.add(def)
+        }
+        if (defs.isEmpty()) return
+        val labels = ArrayList<String>()
+        for (d in defs) labels.add("${d.icon} ${d.name}\n　${d.desc}")
+        AlertDialog.Builder(this)
+            .setTitle("🎒 どれを つかう？")
+            .setItems(labels.toTypedArray()) { _, which -> useItem(p, defs[which]) }
+            .setNegativeButton("やめる", null)
+            .show()
+    }
+
+    /** 同じ世界で いちばん さきにいる 相手。いなければ null */
+    private fun frontRival(p: Player): Player? =
+        players.filter { it !== p && it.inCave == p.inCave }.maxByOrNull { it.position }
+
+    private fun useItem(p: Player, def: GameData.ItemDef) {
+        val rival = if (def.target == "other") frontRival(p) else null
+        if (def.target == "other" && rival == null) {
+            Toast.makeText(this, "いま つかえる あいてが いません", Toast.LENGTH_SHORT).show()
+            return
+        }
+        p.items.remove(def.id)
+        p.itemUsed++
+        val sb = StringBuilder("${def.icon} ${def.name} を つかった！\n")
+        if (def.useMessage.isNotBlank()) sb.append(def.useMessage).append("\n")
+        if (rival != null) {
+            if (def.swap) {
+                val tmp = p.position
+                p.position = rival.position
+                rival.position = tmp
+                sb.append("${who(p)} と ${who(rival)} が いれかわった！\n")
+            }
+            if (def.dMove < 0) {
+                rival.position = (rival.position + def.dMove).coerceAtLeast(0)
+                sb.append("${who(rival)} が ${-def.dMove}マス もどった！\n")
+            }
+        }
+        p.manpuku = (p.manpuku + gain(p, def.dManpuku)).coerceIn(0, 999)
+        p.juujitsu = (p.juujitsu + gain(p, def.dJuujitsu)).coerceIn(0, 999)
+        p.yuujou = (p.yuujou + gain(p, def.dYuujou)).coerceIn(0, 999)
+        if (def.boost > 0) {
+            p.itemBoost += def.boost
+            sb.append("つぎの ルーレットが +${def.boost}！\n")
+        }
+        if (def.guard) {
+            p.restGuard = true
+            sb.append("つぎの おやすみを 1かい ふせげる！\n")
+        }
+        statusText.text = sb.toString().trimEnd()
+        updateStatsBar()
+        updateSkillButtons()
+        boardView.invalidate()
+    }
+
+    /**
+     * もちものを わたす。いっぱいなら もらえない
+     * （どれを捨てるかは聞かない。テンポを止めないほうが小さい子には遊びやすい）
+     */
+    private fun giveItem(p: Player, id: String) {
+        if (id.isBlank()) return
+        val def = itemOf(id)
+        if (def == null) return
+        if (p.items.size >= itemsData.maxHold) return
+        p.items.add(id)
+    }
+
+    /** イベントで もちものが もらえるときの ひとこと */
+    private fun itemPreview(id: String): String {
+        val def = itemOf(id)
+        if (def == null) return ""
+        return "\n\n🎒 ${def.icon}${def.name} を てにいれた！"
     }
 
     private fun showStatusDialog() {
         val sb = StringBuilder("ステージ${stageIndex + 1}/${stages.size}「${stage.name}」\n\n")
         for (p in players.sortedByDescending { scoreOf(it) }) {
             sb.append("${who(p)}　ごうけい ${p.total}\n")
+            if (p.items.isNotEmpty()) {
+                val names = StringBuilder()
+                for (id in p.items) {
+                    val def = itemOf(id)
+                    if (def != null) {
+                        if (names.isNotEmpty()) names.append("、")
+                        names.append(def.icon).append(def.name)
+                    }
+                }
+                if (names.isNotEmpty()) sb.append("  🎒 ").append(names).append("\n")
+            }
             val where = if (p.inCave) "どうくつ" else "ほんせん"
             sb.append("  $where ${p.position} / ${Board.goal(p.inCave)}\n")
             sb.append("  ${statNames[0]} ${p.manpuku}　${statNames[1]} ${p.juujitsu}" +
@@ -1130,6 +1266,11 @@ class MainActivity : Activity() {
     private fun startTurn() {
         val p = players[turn]
         // 1回休み: フラグを消して この手番は とばす（全員が休んでも消えるので止まらない）
+        if (p.skipNext && p.restGuard) {
+            p.skipNext = false
+            p.restGuard = false
+            statusText.text = "⏰ ${who(p)} は めざましで とびおきた！"
+        }
         if (p.skipNext) {
             p.skipNext = false
             p.restCount++
@@ -1175,6 +1316,11 @@ class MainActivity : Activity() {
             steps += Skill.MANPUKU_BONUS
             p.boostNext = false
             extras.append(" 🍖+${Skill.MANPUKU_BONUS}")
+        }
+        if (p.itemBoost > 0) {
+            steps += p.itemBoost
+            extras.append(" 🎒+${p.itemBoost}")
+            p.itemBoost = 0
         }
         if (p.yuujou >= Skill.YUUJOU_THRESHOLD) {
             steps += Skill.YUUJOU_BONUS
@@ -1412,6 +1558,7 @@ class MainActivity : Activity() {
         addAward(out, "🍌", "ドジっこしょう", "もどったマス ") { it.backSteps }
         addAward(out, "😴", "ねぼすけしょう", "おやすみ ") { it.restCount }
         addAward(out, "🔥", "ぼうけんかしょう", "きけんな みちを ") { it.braveCount }
+        addAward(out, "🎒", "どうぐつかいしょう", "つかった もちもの ") { it.itemUsed }
         addAward(out, "🚩", "いちばんのりしょう", "1ちゃく ") { it.stageWins }
         return out
     }
@@ -1514,6 +1661,7 @@ class MainActivity : Activity() {
                     it.passedExam = false; it.hasLover = false; it.examTries = 0
                     it.stageWins = 0
                     it.backSteps = 0; it.restCount = 0; it.braveCount = 0
+                    it.items.clear(); it.itemBoost = 0; it.restGuard = false; it.itemUsed = 0
                 }
                 stageIndex = 0
                 turn = 0
@@ -1839,9 +1987,11 @@ class MainActivity : Activity() {
      * 通常イベントと選択肢イベントの共通処理。
      */
     private fun applyOutcome(
-        p: Player, d1: Int, d2: Int, d3: Int, dMove: Int, skip: Boolean, kind: EventKind
+        p: Player, d1: Int, d2: Int, d3: Int, dMove: Int, skip: Boolean, kind: EventKind,
+        itemId: String = ""
     ) {
         if (dMove < 0) p.backSteps += -dMove
+        giveItem(p, itemId)
         p.manpuku = (p.manpuku + gain(p, d1)).coerceIn(0, 999)
         p.juujitsu = (p.juujitsu + gain(p, d2)).coerceIn(0, 999)
         p.yuujou = (p.yuujou + gain(p, d3)).coerceIn(0, 999)
@@ -1903,7 +2053,8 @@ class MainActivity : Activity() {
     /** えらんだ結果を写真つきで見せる */
     private fun showChoiceResult(p: Player, ev: GameEvent, c: Choice) {
         val head = if (p.isHuman) "" else "${who(p)} は「${c.label}」を えらんだ\n\n"
-        val text = head + c.message + (if (c.skipTurn) "\n\n💤 つぎの ばんは おやすみ…" else "")
+        val text = head + c.message + (if (c.skipTurn) "\n\n💤 つぎの ばんは おやすみ…" else "") +
+            itemPreview(if (c.itemId.isNotBlank()) c.itemId else ev.itemId)
         val content = buildEventContent(
             p, if (c.bgRes != 0) c.bgRes else ev.bgRes, ev.groupSize, ev.kind,
             text, Color.parseColor("#1565C0")
@@ -1913,7 +2064,10 @@ class MainActivity : Activity() {
             .setCancelable(false)
             .setPositiveButton("OK") { _, _ ->
                 if (c.dMove < 0) p.braveCount++
-                applyOutcome(p, c.dManpuku, c.dJuujitsu, c.dYuujou, c.dMove, c.skipTurn, ev.kind)
+                val gotId = if (c.itemId.isNotBlank()) c.itemId else ev.itemId
+                applyOutcome(
+                    p, c.dManpuku, c.dJuujitsu, c.dYuujou, c.dMove, c.skipTurn, ev.kind, gotId
+                )
             }
             .show()
     }
@@ -2005,7 +2159,8 @@ class MainActivity : Activity() {
         val bonusHit = meetsCond(p, ev)
         val text = ev.message +
             (if (bonusHit && ev.condMessage.isNotBlank()) "\n\n✨ ${ev.condMessage}" else "") +
-            (if (ev.skipTurn) "\n\n💤 つぎの ばんは おやすみ…" else "")
+            (if (ev.skipTurn) "\n\n💤 つぎの ばんは おやすみ…" else "") +
+            itemPreview(ev.itemId)
         val content = buildEventContent(
             p, ev.bgRes, ev.groupSize, ev.kind, text,
             if (bonusHit) Color.parseColor("#F9A825") else Color.parseColor("#33691E")
@@ -2023,7 +2178,7 @@ class MainActivity : Activity() {
                     d2 += ev.condBonus2
                     d3 += ev.condBonus3
                 }
-                applyOutcome(p, d1, d2, d3, ev.dMove, ev.skipTurn, ev.kind)
+                applyOutcome(p, d1, d2, d3, ev.dMove, ev.skipTurn, ev.kind, ev.itemId)
             }
             .show()
     }
