@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "maxHold": 3,
+  "unusedScore": 5,
+  "items": [
+    {
+      "id": "banana",
+      "name": "バナナのかわ",
+      "icon": "🍌",
+      "desc": "せんとうの あいてを 3マス もどす",
+      "target": "other",
+      "move": -3,
+      "useMessage": "そっと おいた バナナのかわ。\nみごとに すべった！"
+    },
+    {
+      "id": "kaminari",
+      "name": "かみなりだいこ",
+      "icon": "🥁",
+      "desc": "せんとうの あいてを 5マス もどす",
+      "target": "other",
+      "move": -5,
+      "useMessage": "ゴロゴロ ドン！\nびっくりして にげもどった！"
+    },
+    {
+      "id": "irekae",
+      "name": "いれかえボタン",
+      "icon": "🔄",
+      "desc": "せんとうの あいてと ばしょを こうかん",
+      "target": "other",
+      "swap": true,
+      "useMessage": "ポチッとな。\nきがついたら いれかわっていた！"
+    },
+    {
+      "id": "onigiri",
+      "name": "おおきな おにぎり",
+      "icon": "🍙",
+      "desc": "満腹+20",
+      "target": "self",
+      "manpuku": 20,
+      "useMessage": "ほおばった！\nおなかが いっぱいだ。"
+    },
+    {
+      "id": "ehon",
+      "name": "たからの えほん",
+      "icon": "📕",
+      "desc": "充実+20",
+      "target": "self",
+      "juujitsu": 20,
+      "useMessage": "よみふけった！\nこころが みたされた。"
+    },
+    {
+      "id": "tegami",
+      "name": "ともだちの てがみ",
+      "icon": "💌",
+      "desc": "友情+20",
+      "target": "self",
+      "yuujou": 20,
+      "useMessage": "だいじに よんだ。\nげんきが わいてきた！"
+    },
+    {
+      "id": "rocket",
+      "name": "ロケットぐつ",
+      "icon": "🚀",
+      "desc": "つぎの ルーレット+4",
+      "target": "self",
+      "boost": 4,
+      "useMessage": "はいた しゅんかん ゴォォ！\nつぎは とおくまで とべそうだ。"
+    },
+    {
+      "id": "clock",
+      "name": "めざましどけい",
+      "icon": "⏰",
+      "desc": "おやすみを 1かい ふせぐ",
+      "target": "self",
+      "guard": true,
+      "useMessage": "まくらもとに セット。\nこれで ねすごさない！"
+    }
+  ]
+}

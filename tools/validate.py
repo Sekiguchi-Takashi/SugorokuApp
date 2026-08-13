@@ -50,7 +50,7 @@ def drawables():
     return set(os.path.splitext(f)[0] for f in os.listdir(DRAWABLE))
 
 
-def check_stages(files, fname='stages.json'):
+def check_stages(files, fname='stages.json', item_ids=frozenset()):
     print('\n=== %s ===' % fname)
     path = os.path.join(ASSETS, fname)
     try:
@@ -98,6 +98,14 @@ def check_stages(files, fname='stages.json'):
             return e.get('manpuku', 0) + e.get('juujitsu', 0) + e.get('yuujou', 0)
         def is_bad(e):
             return stat_sum(e) < 0 or e.get('move', 0) < 0
+        # もちもの（items.json の id）が実在するか
+        for e in nrm:
+            for iid, where in ([(e.get('item', ''), 'cell %d' % e['cell'])] +
+                               [(c.get('item', ''), 'cell %d の「%s」'
+                                 % (e['cell'], c.get('label', '?')))
+                                for c in (e.get('choices') or [])]):
+                if iid and iid not in item_ids:
+                    err('%s の もちもの %s が items.json にありません' % (where, iid))
         cho_ev = [e for e in nrm if e.get('choices')]
         rest_ev = [e for e in nrm if not e.get('choices') and e.get('skip')]
         plain = [e for e in nrm if not e.get('choices') and not e.get('skip')]
@@ -206,6 +214,56 @@ def check_stages(files, fname='stages.json'):
               len(wed), len(bir), len(job), len(shop),
               len(exam), len(love), len(mv), net, 'なし' if b == -1 else str(b)))
     return d
+
+
+def check_items():
+    """もちもの（items.json）。自分に使うものは移動を持たない、
+    相手に使うものは もどす か いれかえ のどちらかだけ、を守らせる。"""
+    print('\n=== items.json ===')
+    path = os.path.join(ASSETS, 'items.json')
+    if not os.path.exists(path):
+        warn('items.json がありません（もちもの無しで動きます）')
+        return set()
+    try:
+        d = json.load(open(path, encoding='utf-8'))
+    except Exception as e:
+        err('items.json がJSONとして読めません: %s' % e)
+        return set()
+    ids = set()
+    for it in d.get('items', []):
+        i = it.get('id', '')
+        if not i:
+            err('id のない もちものがあります')
+            continue
+        if i in ids:
+            err('もちものの id が重複: %s' % i)
+        ids.add(i)
+        for k in ('name', 'icon', 'desc'):
+            if not str(it.get(k, '')).strip():
+                err('%s: %s が空' % (i, k))
+        tgt = it.get('target', 'self')
+        if tgt not in ('self', 'other'):
+            err('%s: target は self か other' % i)
+        if tgt == 'self' and (it.get('move', 0) or it.get('swap')):
+            err('%s: 自分に使うものに 移動・いれかえ は書けません' % i)
+        if tgt == 'other':
+            if it.get('move', 0) > 0:
+                err('%s: 相手を すすめる もちものは作れません' % i)
+            if not it.get('move', 0) and not it.get('swap'):
+                err('%s: 相手に使うのに なにも起きません' % i)
+            for k in ('manpuku', 'juujitsu', 'yuujou', 'boost', 'guard'):
+                if it.get(k):
+                    warn('%s: 相手に使うものに 自分への効果が まざっています' % i)
+        if it.get('move', 0) < -8:
+            warn('%s: %dマスも もどすのは きつすぎます' % (i, -it.get('move', 0)))
+        if it.get('boost', 0) > 6:
+            warn('%s: ルーレット+%d は 大きすぎます' % (i, it.get('boost', 0)))
+    if not ids:
+        warn('もちものが1つもありません')
+    else:
+        ok('もちもの%d種 もてる数%d 未使用スコア%d'
+           % (len(ids), d.get('maxHold', 3), d.get('unusedScore', 5)))
+    return ids
 
 
 def check_cave(files, stages_doc):
@@ -499,9 +557,10 @@ def main():
     files = drawables()
     print('検査対象: %s面（%s）' % ('B' if SIDE == 'bside' else 'A', MODULE))
     print('drawable: %d件' % len(files))
-    doc = check_stages(files, 'stages.json')
+    item_ids = check_items()
+    doc = check_stages(files, 'stages.json', item_ids)
     if os.path.exists(os.path.join(ASSETS, 'school_stages.json')):
-        check_stages(files, 'school_stages.json')
+        check_stages(files, 'school_stages.json', item_ids)
     check_cave(files, doc)
     check_jobs(files)
     sets = check_charas(files)

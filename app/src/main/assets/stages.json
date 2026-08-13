@@ -113,7 +113,8 @@
           "juujitsu": 15,
           "yuujou": 0,
           "group": 4,
-          "move": 2
+          "move": 2,
+          "item": "banana"
         },
         {
           "cell": 9,
@@ -151,7 +152,8 @@
               "bg": "bg_cafe",
               "message": "ジュースを のんで やすんだ。\n満腹8　充実6",
               "manpuku": 8,
-              "juujitsu": 6
+              "juujitsu": 6,
+              "item": "onigiri"
             }
           ]
         },
@@ -190,7 +192,8 @@
           "juujitsu": 8,
           "yuujou": 0,
           "group": 2,
-          "move": 0
+          "move": 0,
+          "item": "rocket"
         },
         {
           "cell": 16,
@@ -394,7 +397,8 @@
           "juujitsu": 25,
           "yuujou": 10,
           "group": 2,
-          "move": 0
+          "move": 0,
+          "item": "kaminari"
         },
         {
           "cell": 10,
@@ -457,7 +461,8 @@
           "juujitsu": 10,
           "yuujou": 0,
           "group": 1,
-          "move": -2
+          "move": -2,
+          "item": "onigiri"
         },
         {
           "cell": 17,
@@ -521,7 +526,8 @@
               "bg": "bg_town",
               "message": "きれいな しゃしんが とれた。\n充実12　友情6",
               "juujitsu": 12,
-              "yuujou": 6
+              "yuujou": 6,
+              "item": "clock"
             }
           ]
         },
@@ -642,7 +648,8 @@
           "juujitsu": 25,
           "yuujou": 10,
           "group": 2,
-          "move": 0
+          "move": 0,
+          "item": "irekae"
         },
         {
           "cell": 8,
@@ -681,7 +688,8 @@
               "message": "のんびり ういて すごした。\n満腹5　充実12　友情8",
               "manpuku": 5,
               "juujitsu": 12,
-              "yuujou": 8
+              "yuujou": 8,
+              "item": "tegami"
             }
           ]
         },
@@ -762,7 +770,8 @@
           "juujitsu": 12,
           "yuujou": 8,
           "group": 2,
-          "move": 0
+          "move": 0,
+          "item": "ehon"
         },
         {
           "cell": 20,

@@ -19,7 +19,7 @@ import org.json.JSONObject
  * つうしん対戦の ロビー画面（v6.0-A）。
  *
  * ここでやるのは「2台がつながること」の確認まで。
- * キャラ選択と対戦本体は v6.1-A で載せる。
+ * キャラ選択と対戦本体は v6.2-A で載せる。
  *
  * 画面は Activity を増やさず setContentView の差し替えで作る（EditorScreens と同じ方式）。
  */
@@ -310,7 +310,7 @@ class NetLobby(
         statusView?.text = "おくりました。へんじを まっています…"
     }
 
-    /** v6.0-A では ping/pong だけ。対戦の中身は v6.1-A で足す */
+    /** v6.0-A では ping/pong だけ。対戦の中身は v6.2-A で足す */
     private fun onMessage(o: JSONObject) {
         when (o.optString("t")) {
             "ping" -> {

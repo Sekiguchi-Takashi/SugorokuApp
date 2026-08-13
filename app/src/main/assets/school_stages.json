@@ -100,7 +100,8 @@
           "juujitsu": 12,
           "yuujou": 0,
           "group": 4,
-          "move": 0
+          "move": 0,
+          "item": "clock"
         },
         {
           "cell": 7,
@@ -120,7 +121,8 @@
               "label": "としょしつで べんきょう",
               "bg": "bg_toshoshitsu",
               "message": "しずかに べんきょうした。\n勉強+18",
-              "manpuku": 18
+              "manpuku": 18,
+              "item": "onigiri"
             }
           ]
         },
@@ -183,7 +185,8 @@
           "condBonus1": 0,
           "condBonus2": 0,
           "condBonus3": 8,
-          "condMessage": "運動が たかいので さらに モテモテ+8！"
+          "condMessage": "運動が たかいので さらに モテモテ+8！",
+          "item": "banana"
         },
         {
           "cell": 14,
@@ -216,7 +219,8 @@
           "juujitsu": 0,
           "yuujou": 8,
           "group": 3,
-          "move": 0
+          "move": 0,
+          "item": "tegami"
         },
         {
           "cell": 18,
@@ -371,7 +375,8 @@
               "bg": "bg_bukatsu",
               "message": "れんしゅうで あせを かいた！\n運動+16　モテモテ+5",
               "juujitsu": 16,
-              "yuujou": 5
+              "yuujou": 5,
+              "item": "kaminari"
             },
             {
               "label": "じゅくへ 行く",
@@ -401,7 +406,8 @@
           "juujitsu": 12,
           "yuujou": 0,
           "group": 3,
-          "move": 0
+          "move": 0,
+          "item": "rocket"
         },
         {
           "cell": 7,
@@ -468,7 +474,8 @@
           "condBonus1": 0,
           "condBonus2": 0,
           "condBonus3": 10,
-          "condMessage": "運動が たかいので さらに モテモテ+10！"
+          "condMessage": "運動が たかいので さらに モテモテ+10！",
+          "item": "irekae"
         },
         {
           "cell": 13,
@@ -545,7 +552,8 @@
           "juujitsu": -5,
           "yuujou": 0,
           "group": 1,
-          "move": 0
+          "move": 0,
+          "item": "ehon"
         },
         {
           "cell": 21,
