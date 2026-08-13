@@ -51,6 +51,7 @@ class MainActivity : Activity() {
         var examTries: Int = 0,          // 受験に挑戦した回数（上限あり）
         var hasLover: Boolean = false,   // こくはくに成功したか
         var skipNext: Boolean = false,   // つぎの じぶんの番を1回休む
+        var stageWins: Int = 0,          // ステージ1着の かず（勝敗の どうてん判定に使う）
         val skills: MutableSet<String> = HashSet()   // 取得済みスキルのid
     ) {
         val total: Int get() = manpuku + juujitsu + yuujou
@@ -397,9 +398,41 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { leftMargin = dp(12) })
+        root.addView(Button(this).apply {
+            text = "📶 つうしん たいせん"
+            textSize = 17f
+            setTextColor(Color.WHITE)
+            background = roundedBg(Color.parseColor("#1E88E5"))
+            setPadding(dp(28), dp(12), dp(28), dp(12))
+            setOnClickListener { showNetLobby() }
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(16) })
         root.addView(subRow)
 
         setContentView(root)
+    }
+
+    /**
+     * つうしん対戦のロビー。v6.0-A では「2台がつながること」の確認まで。
+     * キャラ選択と対戦本体は v6.1-A で載せる。
+     */
+    private fun showNetLobby() {
+        handler.removeCallbacksAndMessages(null)
+        NetLobby(
+            act = this,
+            appVersion = appVersionName(),
+            onBack = { showTitle() }
+        ).showTop()
+    }
+
+    /** 自分のバージョン名。つないだ相手と つき合わせるのに使う */
+    private fun appVersionName(): String = try {
+        packageManager.getPackageInfo(packageName, 0).versionName ?: "?"
+    } catch (e: Exception) {
+        android.util.Log.w("MainActivity", "バージョン名を取れませんでした", e)
+        "?"
     }
 
     /** エディタ・図鑑の画面。データを編集したら読み直してタイトルに戻す */
@@ -1375,6 +1408,7 @@ class MainActivity : Activity() {
 
     // ---------------- ステージクリア / 最終結果 ----------------
     private fun stageClear(winner: Player) {
+        winner.stageWins++
         winner.juujitsu = (winner.juujitsu + Skill.CLEAR_BONUS).coerceIn(0, 999)
         winner.yuujou = (winner.yuujou + Skill.CLEAR_BONUS).coerceIn(0, 999)
         // ステージ終了時、全員が給料をもらい職業のステータス補正を受ける
@@ -1396,7 +1430,7 @@ class MainActivity : Activity() {
         AlertDialog.Builder(this)
             .setTitle("🎉 ステージ${stageIndex + 1} クリア！")
             .setMessage(
-                "${who(winner)} が 1ばんに ゴール！\n" +
+                "${who(winner)} が 1ばんに ゴール！（1ちゃく ${winner.stageWins}かいめ）\n" +
                 "1ちゃくボーナス 充実+${Skill.CLEAR_BONUS}　友情+${Skill.CLEAR_BONUS}\n\n" +
                 (if (mode == GameMode.SCHOOL) "" else "【 きゅうりょう 】\n$payLines\n") +
                 "つぎは「${next.name}」！\nみんなで すすもう。\n" +
@@ -1418,10 +1452,46 @@ class MainActivity : Activity() {
             .show()
     }
 
+    /**
+     * 最終結果。だれが勝ったかを 先頭に大きく出す。
+     * 勝敗は スコア → ステージ1着の かず の順で決め、
+     * どちらも同じなら ひきわけ にする（ゴール順では決めない）。
+     */
     private fun showFinalResult(winner: Player) {
-        val ranking = players.sortedByDescending { scoreOf(it) }
+        val ranking = players.sortedWith(
+            compareByDescending<Player> { scoreOf(it) }.thenByDescending { it.stageWins }
+        )
+        val top = ranking[0]
+        val tied = players.filter {
+            scoreOf(it) == scoreOf(top) && it.stageWins == top.stageWins
+        }
         val sb = StringBuilder()
-        sb.append("さいごに ゴールしたのは ${who(winner)}！\n\n")
+        if (tied.size >= 2) {
+            sb.append("🤝 ひきわけ！\n")
+            sb.append(tied.joinToString(" と ") { who(it) })
+            sb.append(" が おなじ てんすう！\n\n")
+        } else {
+            sb.append("🏆 ${who(top)} の かち！\n")
+            val second = ranking.getOrNull(1)
+            if (second != null) {
+                sb.append("2いに ${scoreOf(top) - scoreOf(second)}てん さを つけた！\n")
+            }
+            sb.append("\n")
+        }
+        sb.append("さいごのステージで 1ばんに ゴールしたのは ${who(winner)}\n\n")
+        // 人間どうしの対戦は 見くらべやすいように 1対1でも出す
+        val humans = players.filter { it.isHuman }
+        if (humans.size == 2) {
+            val a = humans[0]
+            val b = humans[1]
+            val diff = abs(scoreOf(a) - scoreOf(b))
+            sb.append("【 ${who(a)}　vs　${who(b)} 】\n")
+            sb.append("てんすう　${scoreOf(a)} - ${scoreOf(b)}（さ ${diff}てん）\n")
+            sb.append("1ちゃく　　${a.stageWins} - ${b.stageWins}\n")
+            sb.append("${statNames[0]}　${a.manpuku} - ${b.manpuku}\n")
+            sb.append("${statNames[1]}　${a.juujitsu} - ${b.juujitsu}\n")
+            sb.append("${statNames[2]}　${a.yuujou} - ${b.yuujou}\n\n")
+        }
         // モードによってスコアの内訳がちがうので、説明も出し分ける
         sb.append(
             if (mode == GameMode.SCHOOL)
@@ -1441,7 +1511,8 @@ class MainActivity : Activity() {
                 if (p.hasChild) marks.append(" 👶") else if (p.married) marks.append(" 💍")
                 jobOf(p.jobId)?.let { marks.append(it.icon) }
             }
-            sb.append("$medal ${who(p)}$marks　${scoreOf(p)}てん\n")
+            val winMark = if (p.stageWins > 0) " 🚩${p.stageWins}" else ""
+            sb.append("$medal ${who(p)}${marks}${winMark}　${scoreOf(p)}てん\n")
             sb.append("　　${statNames[0]}${p.manpuku} ${statNames[1]}${p.juujitsu}" +
                 " ${statNames[2]}${p.yuujou}")
             if (mode != GameMode.SCHOOL) {
@@ -1461,6 +1532,7 @@ class MainActivity : Activity() {
                     it.inCave = false; it.caveReturn = 0; it.skipNext = false
                     it.money = jobsData.startMoney; it.jobId = "none"; it.skills.clear()
                     it.passedExam = false; it.hasLover = false; it.examTries = 0
+                    it.stageWins = 0
                 }
                 stageIndex = 0
                 turn = 0
