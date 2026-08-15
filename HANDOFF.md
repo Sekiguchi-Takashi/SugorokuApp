@@ -2,7 +2,7 @@
 
 ## このファイルについて
 **新しいチャットの冒頭でこれを渡せば、そのまま開発を再開できる。**
-併せて最新の納品ZIP（`SugorokuApp_v6.2-A-deploy.zip`）をアップロードすること。
+併せて最新の納品ZIP（`SugorokuApp_v6.2-A-ci.zip`）をアップロードすること。
 チャットのコンテナにはファイルが残らないため、ZIPが無いと作業を続けられない。
 
 ## 概要
@@ -68,7 +68,7 @@
 ## 構成
 ```
 SugorokuApp/
-├── .github/workflows/build.yml   # 1ファイル2ジョブ（app / bside）→ APK artifact 2つ
+├── .github/workflows/build.yml   # 1ファイル2ジョブ（app / bside）。コンパイル確認のみ
 ├── build.gradle.kts / settings.gradle.kts
 ├── debug.keystore
 └── app/
@@ -154,6 +154,17 @@ v6.1-A（もちもの＋称号を一度に投入）で `MainActivity.kt` の `Bo
 **ビルドが緑になったのを確認してから次を積む。** v5.6 → v6.0 → v6.1 と3世代を未確認で積み上げた結果、
 エラーが出たときに3世代のどこが原因か切り分けられなくなった。
 
+## ⛔ build.yml に actions/upload-artifact を足さない（恒久ルール）
+
+Artifacts ストレージの無料枠（0.5GB）が枯渇すると `Artifact storage quota has been hit` で
+**ビルドそのものが失敗する**。APKは Release（タグ発行）から配布しているので Artifacts は不要。
+
+`build.yml` からは `actions/upload-artifact` ステップを削除済み（v6.2-A）。
+このワークフローは **「コンパイルが通るか」を確認するためだけのもの** と割り切る。
+APKが要るときは `deploy.sh` でタグを打ち、Release から取る。
+
+**`upload-artifact` を足したくなったら、それは配布の話。Release 側でやること。**
+
 ## 🚀 受け渡しは deploy.sh に集約する（恒久ルール）
 
 **以後、更新の push は `bash deploy.sh "コミットメッセージ"` の1コマンドで完結させる。**
@@ -180,7 +191,7 @@ GitHub API で直近リリースのタグを取得して次のパッチ版を算
 **2アプリ構成なので、リリース用の APK も2つある**（`:app` と `:bside`）。
 カタログ側の `release.yml` が1つのAPKしか拾わない作りなら、B面が配信されない。
 自作ストアに B面（がっこうすごろく）が現れない場合は、まずここを疑うこと。
-なお push で走る `build.yml`（デバッグAPKを artifact に出す）はこれとは別物で、両方残しておいてよい。
+なお push で走る `build.yml` はコンパイル確認用でリリースとは別物なので、両方残しておいてよい。
 
 ## v6.2-A / v1.4-B: もちもの（items.json）
 
@@ -247,7 +258,7 @@ GitHub API で直近リリースのタグを取得して次のパッチ版を算
 **症状**: 1回 push するたびに Actions に run が2本（Build APK / Build B-side APK）立っていた。
 **原因**: `build.yml` と `build_bside.yml` の2ファイルが どちらも `on: push` だったため。pushが2回起きていたわけではない。
 
-**対応**: `build_bside.yml` を削除し、`build.yml` を **1ファイル2ジョブ**（`app` / `bside`）にまとめた。run は1本、ジョブは並列で走り、APKは従来どおり2つ artifact に出る。
+**対応**: `build_bside.yml` を削除し、`build.yml` を **1ファイル2ジョブ**（`app` / `bside`）にまとめた。run は1本、ジョブは並列で走る。（v6.2-A で artifact 出力は廃止。下記「Artifacts を使わない」を参照）
 
 - ジョブを分けたまま（1ジョブで両方ビルドしない）にしたのは、**A面が落ちてもB面のビルド結果が得られる**ようにするため。「干渉しない」という2アプリ構成の方針と合わせてある
 - `paths:` フィルタで振り分ける案もあったが、`build.gradle.kts` や `tools/` など共有ファイルを触ると結局両方走るので採らなかった

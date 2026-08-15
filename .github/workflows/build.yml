@@ -1,5 +1,10 @@
 name: Build APK
 
+# APKの配布は Release（タグ発行）で行う。
+# ここで actions/upload-artifact を使うと Artifacts の無料枠(0.5GB)が枯渇し
+# "Artifact storage quota has been hit" でビルドが落ちるので、絶対に足さないこと。
+# このワークフローは「コンパイルが通るか」の確認用と割り切る。
+
 on:
   push:
     branches: [ main ]
@@ -24,11 +29,6 @@ jobs:
       - name: Build debug APK
         run: gradle :app:assembleDebug
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: SugorokuApp-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
-
   bside:
     name: B面 がっこうすごろく
     runs-on: ubuntu-latest
@@ -46,8 +46,3 @@ jobs:
 
       - name: Build B-side debug APK
         run: gradle :bside:assembleDebug
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: SugorokuApp-bside-debug-apk
-          path: bside/build/outputs/apk/debug/bside-debug.apk
