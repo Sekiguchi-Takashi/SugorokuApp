@@ -2,7 +2,7 @@
 
 ## このファイルについて
 **新しいチャットの冒頭でこれを渡せば、そのまま開発を再開できる。**
-併せて最新の納品ZIP（`SugorokuApp_v6.2-A.zip`）をアップロードすること。
+併せて最新の納品ZIP（`SugorokuApp_v6.2-A-deploy.zip`）をアップロードすること。
 チャットのコンテナにはファイルが残らないため、ZIPが無いと作業を続けられない。
 
 ## 概要
@@ -72,6 +72,7 @@ SugorokuApp/
 ├── build.gradle.kts / settings.gradle.kts
 ├── debug.keystore
 └── app/
+    ├── deploy.sh                    # push とタグ発行を1コマンドで（恒久仕様）
     ├── build.gradle.kts
     └── src/main/
         ├── AndroidManifest.xml
@@ -152,6 +153,34 @@ v6.1-A（もちもの＋称号を一度に投入）で `MainActivity.kt` の `Bo
 ### 進めかたの原則（v6.1-A の反省）
 **ビルドが緑になったのを確認してから次を積む。** v5.6 → v6.0 → v6.1 と3世代を未確認で積み上げた結果、
 エラーが出たときに3世代のどこが原因か切り分けられなくなった。
+
+## 🚀 受け渡しは deploy.sh に集約する（恒久ルール）
+
+**以後、更新の push は `bash deploy.sh "コミットメッセージ"` の1コマンドで完結させる。**
+`git add` / `commit` / `push` を手で打つ運用はやめる。
+
+```
+cd ~/SugorokuApp
+bash deploy.sh "v6.2-A: もちもの"
+```
+
+deploy.sh がやること: リポジトリへ移動 → `git config --global github.token` からトークン取得 →
+remote 貼り直し → `add -A` → `commit` → **`git pull --rebase origin main`** → `push -u origin main` →
+GitHub API で直近リリースのタグを取得して次のパッチ版を算出 → タグを発行。
+
+### 触ってはいけないもの
+- **`git pull --rebase origin main` は必須**。カタログ管理システムが API 経由で
+  `.github/workflows/release.yml` と `ci/appathy.keystore` を直接コミットしているため、
+  これが無いと push が rejected になる
+- **`ci/` ディレクトリと `.github/workflows/release.yml` は削除しない**（配布ビルドに必要）。
+  差分ZIPを展開しても消えないが、掃除のつもりで消さないこと
+- タグを打つと Actions がビルドして Release を作り、自作アプリストアに更新として現れる
+
+### このリポジトリ固有の注意
+**2アプリ構成なので、リリース用の APK も2つある**（`:app` と `:bside`）。
+カタログ側の `release.yml` が1つのAPKしか拾わない作りなら、B面が配信されない。
+自作ストアに B面（がっこうすごろく）が現れない場合は、まずここを疑うこと。
+なお push で走る `build.yml`（デバッグAPKを artifact に出す）はこれとは別物で、両方残しておいてよい。
 
 ## v6.2-A / v1.4-B: もちもの（items.json）
 
