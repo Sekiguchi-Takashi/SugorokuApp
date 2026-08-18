@@ -2,7 +2,7 @@
 
 ## このファイルについて
 **新しいチャットの冒頭でこれを渡せば、そのまま開発を再開できる。**
-併せて最新の納品ZIP（`SugorokuApp_v6.2-A-ci.zip`）をアップロードすること。
+併せて最新の納品ZIP（`SugorokuApp_v6.2.1-A.zip`）をアップロードすること。
 チャットのコンテナにはファイルが残らないため、ZIPが無いと作業を続けられない。
 
 ## 概要
@@ -21,7 +21,7 @@
 | ビルド | `gradle :app:assembleDebug` | `gradle :bside:assembleDebug` |
 | 検証 | `python3 tools/validate.py` | `python3 tools/validate.py bside` |
 
-- 現在バージョン: **A面 v6.2-A** / **B面 v1.4-B**
+- 現在バージョン: **A面 v6.2.1-A** / **B面 v1.4-B**
 - **ルール設計の正典は `GAME_ONTOLOGY.md`**（v6.0.1-A で追加）。新しいマス・イベント・ルールを足すときは、先にそこの「4つの族」と「資源」のどこに置くかを決めてから作ること
 - minSdk 26 / targetSdk 34
 
@@ -68,7 +68,8 @@
 ## 構成
 ```
 SugorokuApp/
-├── .github/workflows/build.yml   # 1ファイル2ジョブ（app / bside）。コンパイル確認のみ
+├── .github/workflows/release.yml # タグ起動の配布ビルド（カタログ管理システムが管理）
+├── ci/                          # 署名用。削除・追跡解除しない
 ├── build.gradle.kts / settings.gradle.kts
 ├── debug.keystore
 └── app/
@@ -154,44 +155,40 @@ v6.1-A（もちもの＋称号を一度に投入）で `MainActivity.kt` の `Bo
 **ビルドが緑になったのを確認してから次を積む。** v5.6 → v6.0 → v6.1 と3世代を未確認で積み上げた結果、
 エラーが出たときに3世代のどこが原因か切り分けられなくなった。
 
-## ⛔ build.yml に actions/upload-artifact を足さない（恒久ルール）
+## 📦 納品規約（恒久ルール・全納品物に適用）
 
-Artifacts ストレージの無料枠（0.5GB）が枯渇すると `Artifact storage quota has been hit` で
-**ビルドそのものが失敗する**。APKは Release（タグ発行）から配布しているので Artifacts は不要。
-
-`build.yml` からは `actions/upload-artifact` ステップを削除済み（v6.2-A）。
-このワークフローは **「コンパイルが通るか」を確認するためだけのもの** と割り切る。
-APKが要るときは `deploy.sh` でタグを打ち、Release から取る。
-
-**`upload-artifact` を足したくなったら、それは配布の話。Release 側でやること。**
-
-## 🚀 受け渡しは deploy.sh に集約する（恒久ルール）
-
-**以後、更新の push は `bash deploy.sh "コミットメッセージ"` の1コマンドで完結させる。**
-`git add` / `commit` / `push` を手で打つ運用はやめる。
+### 1. deploy.sh が push とタグ発行まで行う
+更新は `bash deploy.sh "メッセージ"` の1コマンドで完結させる。**`git pull --rebase` とタグ発行を含む。**
 
 ```
-cd ~/SugorokuApp
-bash deploy.sh "v6.2-A: もちもの"
+cd ~
+bash SugorokuApp/deploy.sh "コミットメッセージ"
 ```
 
-deploy.sh がやること: リポジトリへ移動 → `git config --global github.token` からトークン取得 →
-remote 貼り直し → `add -A` → `commit` → **`git pull --rebase origin main`** → `push -u origin main` →
-GitHub API で直近リリースのタグを取得して次のパッチ版を算出 → タグを発行。
+- 次タグは **`git tag --list 'v*' | sort -V` の最大値から算出**し、`git tag <名>` → `git push origin <名>` で**ローカル発行**する
+- **GitHub API の heads / releases 参照は禁止**。反映遅延で一つ前のコミットにタグが付いてしまう
+- 第2引数に `notag` を渡すと push のみでタグを発行しない: `bash deploy.sh "wip" notag`
+- 採番は `v6.2 → v6.2.1`、`v6.2.1 → v6.2.2`、タグが1件も無ければ `v1.0.0`
+- シェルは **`echo` 禁止**（`printf` を使う）、**対話入力禁止**（`read` 等）、**トークンをチャットに貼らせない**
 
-### 触ってはいけないもの
-- **`git pull --rebase origin main` は必須**。カタログ管理システムが API 経由で
-  `.github/workflows/release.yml` と `ci/appathy.keystore` を直接コミットしているため、
+### 2. build.yml は作らない。CIは release.yml のみ
+CIは **`.github/workflows/release.yml`（タグ起動）だけ**。push起動の `build.yml` は作らない。
+**`actions/upload-artifact` は使わない** — Artifactsの無料枠（0.5GB）が枯渇すると
+`Artifact storage quota has been hit` で全ビルドが落ちる。APKはReleaseから配布する。
+
+コンパイルが通るかの確認も、deploy.sh がタグを打つたびに release.yml が走るので そこで分かる。
+
+### 3. 触ってはいけないファイル
+- **`ci/` ディレクトリ** と **`.github/workflows/release.yml`** は配布ビルドに必要。削除・追跡解除しない
+- カタログ管理システムがAPI経由でこの2つを直接コミットするため、**`git pull --rebase` が必須**。
   これが無いと push が rejected になる
-- **`ci/` ディレクトリと `.github/workflows/release.yml` は削除しない**（配布ビルドに必要）。
-  差分ZIPを展開しても消えないが、掃除のつもりで消さないこと
-- タグを打つと Actions がビルドして Release を作り、自作アプリストアに更新として現れる
 
-### このリポジトリ固有の注意
-**2アプリ構成なので、リリース用の APK も2つある**（`:app` と `:bside`）。
-カタログ側の `release.yml` が1つのAPKしか拾わない作りなら、B面が配信されない。
-自作ストアに B面（がっこうすごろく）が現れない場合は、まずここを疑うこと。
-なお push で走る `build.yml` はコンパイル確認用でリリースとは別物なので、両方残しておいてよい。
+### 4. ファイルを削除する納品
+`unzip -o` は端末の旧ファイルを消さないので、**deploy.sh に `rm -f 対象パス` を足す**。
+v6.2.1-A では `rm -f .github/workflows/build.yml` を入れてある。
+
+### 5. 納品の形式
+バージョン番号付きZIP＋同メッセージに実行4行ブロック。冒頭に【本番】か【テスト】を明示する。
 
 ## v6.2-A / v1.4-B: もちもの（items.json）
 
