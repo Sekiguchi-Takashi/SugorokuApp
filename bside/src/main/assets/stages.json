@@ -81,6 +81,15 @@
           "move": 0
         },
         {
+          "cell": 4,
+          "bg": "bg_hoikuen",
+          "kind": "normal",
+          "message": "ほいくえんに いって えんじと あそんだ。\nちいさい子に なつかれた！\n勉強+4　モテモテ+12",
+          "manpuku": 4,
+          "yuujou": 12,
+          "group": 3
+        },
+        {
           "cell": 5,
           "bg": "bg_item_boshi",
           "kind": "normal",
@@ -189,6 +198,15 @@
           "item": "banana"
         },
         {
+          "cell": 13,
+          "bg": "bg_lighthouse",
+          "kind": "normal",
+          "message": "しゃかいか けんがくで とうだいに のぼった。\n勉強+10　運動+5",
+          "manpuku": 10,
+          "juujitsu": 5,
+          "group": 4
+        },
+        {
           "cell": 14,
           "bg": "bg_gym",
           "kind": "normal",
@@ -209,6 +227,17 @@
           "yuujou": 0,
           "group": 1,
           "move": 0
+        },
+        {
+          "cell": 16,
+          "bg": "bg_palmbeach",
+          "kind": "normal",
+          "message": "りんかいがっこう！\nうみで およぎすぎて バテた…。\n運動+15　モテモテ+8\n2マス もどる",
+          "juujitsu": 15,
+          "yuujou": 8,
+          "group": 4,
+          "item": "onigiri",
+          "move": -2
         },
         {
           "cell": 17,
@@ -285,6 +314,15 @@
           "move": 0
         },
         {
+          "cell": 23,
+          "bg": "bg_jungle",
+          "kind": "normal",
+          "message": "どうぶつえんへ えんそく。\nオウムに おべんとうを ねらわれた！\n勉強+6　モテモテ+8",
+          "manpuku": 6,
+          "yuujou": 8,
+          "group": 3
+        },
+        {
           "cell": 24,
           "bg": "bg_item_lamp",
           "kind": "normal",
@@ -316,6 +354,29 @@
           "yuujou": 0,
           "group": 1,
           "move": 0
+        },
+        {
+          "cell": 27,
+          "bg": "bg_treasure",
+          "kind": "normal",
+          "message": "たからさがし ゲーム！\nどこを さがす？",
+          "group": 3,
+          "choices": [
+            {
+              "label": "ふかい やぶの なか",
+              "bg": "bg_jungle",
+              "message": "どろだらけで さがしまわった！\n運動+16　モテモテ+6",
+              "juujitsu": 16,
+              "yuujou": 6
+            },
+            {
+              "label": "としょしつで ヒントを よむ",
+              "bg": "bg_toshoshitsu",
+              "message": "ちずを よんで いちばんに みつけた！\n勉強+16　モテモテ+2",
+              "manpuku": 16,
+              "yuujou": 2
+            }
+          ]
         },
         {
           "cell": 28,
@@ -419,6 +480,16 @@
           "yuujou": -8,
           "group": 1,
           "move": 0
+        },
+        {
+          "cell": 8,
+          "bg": "bg_seacave",
+          "kind": "normal",
+          "message": "しゅうがくりょこうで しょうにゅうどうに はいった。\n勉強+10　運動+8　モテモテ+5",
+          "manpuku": 10,
+          "juujitsu": 8,
+          "yuujou": 5,
+          "group": 4
         },
         {
           "cell": 9,
@@ -531,6 +602,16 @@
           "yuujou": 12,
           "group": 4,
           "move": 0
+        },
+        {
+          "cell": 18,
+          "bg": "bg_palmbeach",
+          "kind": "normal",
+          "message": "なつやすみ、みんなで うみへ 行った。\n運動+12　モテモテ+10",
+          "juujitsu": 12,
+          "yuujou": 10,
+          "group": 4,
+          "item": "rocket"
         },
         {
           "cell": 19,

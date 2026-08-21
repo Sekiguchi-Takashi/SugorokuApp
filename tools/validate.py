@@ -266,7 +266,7 @@ def check_items():
     return ids
 
 
-def check_cave(files, stages_doc):
+def check_cave(files, stages_doc, item_ids=frozenset()):
     print('\n=== cave.json ===')
     path = os.path.join(ASSETS, 'cave.json')
     try:
@@ -292,6 +292,23 @@ def check_cave(files, stages_doc):
     for e in evs:
         if e.get('bg') not in files:
             err('cell %d の画像 %s がありません' % (e['cell'], e.get('bg')))
+        # 洞窟でも 選択肢・もちもの が使えるので 同じ約束を守らせる
+        cs = e.get('choices') or []
+        if cs:
+            if not (2 <= len(cs) <= 4):
+                err('cell %d の choices は 2〜4件（今 %d件）' % (e['cell'], len(cs)))
+            if (e.get('manpuku', 0) or e.get('juujitsu', 0)
+                    or e.get('yuujou', 0) or e.get('move', 0)):
+                err('cell %d は choices があるので 本体に効果を書かない' % e['cell'])
+            for c in cs:
+                if not str(c.get('label', '')).strip():
+                    err('cell %d の choices に label がありません' % e['cell'])
+                if 'bg' in c and c['bg'] not in files:
+                    err('cell %d の「%s」の画像 %s がありません'
+                        % (e['cell'], c.get('label', '?'), c['bg']))
+        for iid in [e.get('item', '')] + [c.get('item', '') for c in cs]:
+            if iid and iid not in item_ids:
+                err('cell %d の もちもの %s が items.json にありません' % (e['cell'], iid))
 
     # 復帰先が盤内に収まるか（全ステージ分）
     if stages_doc:
@@ -561,7 +578,7 @@ def main():
     doc = check_stages(files, 'stages.json', item_ids)
     if os.path.exists(os.path.join(ASSETS, 'school_stages.json')):
         check_stages(files, 'school_stages.json', item_ids)
-    check_cave(files, doc)
+    check_cave(files, doc, item_ids)
     check_jobs(files)
     sets = check_charas(files)
     check_charaset_link(sets)
