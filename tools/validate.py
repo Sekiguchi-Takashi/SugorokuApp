@@ -315,8 +315,10 @@ def check_cave(files, stages_doc, item_ids=frozenset()):
         main_n = stages_doc.get('mainCellCount', 30)
         for st in stages_doc.get('stages', []):
             ret = st.get('branchCell', 0) + skip
-            if ret > main_n - 1:
-                err('%s: 復帰先 %d が盤外(最大%d)' % (st['name'], ret, main_n - 1))
+            # ゴール(main_n-1)ちょうどに復帰すると洞窟に入った瞬間クリアになるので不可
+            if ret > main_n - 2:
+                err('%s: 復帰先 %d が ゴール(%d)に近すぎます（最大 %d）'
+                    % (st['name'], ret, main_n - 1, main_n - 2))
 
     # 洞窟内でスタート(0)に戻る経路がないか総当たり（後退の下限は1）
     ev_map = {e['cell']: e for e in evs}

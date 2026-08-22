@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "name": "どうくつ",
-  "cellCount": 20,
+  "cellCount": 26,
   "returnSkip": 20,
   "bg": "bg_cave",
   "events": [
@@ -192,6 +192,75 @@
       "message": "でぐちが みえてきた！\n充実8　友情5",
       "juujitsu": 8,
       "yuujou": 5,
+      "group": 2
+    },
+    {
+      "cell": 19,
+      "bg": "bg_rockfall",
+      "message": "ゴゴゴ…らくせきだ！\nあわてて にげた。\n満腹-8　充実-10\n3マス もどる",
+      "manpuku": -8,
+      "juujitsu": -10,
+      "move": -3,
+      "group": 1
+    },
+    {
+      "cell": 20,
+      "bg": "bg_searuin",
+      "message": "ちていの みずうみは うみに つながっていた。\nウミガメが あんないして くれた！\n充実18　友情12",
+      "juujitsu": 18,
+      "yuujou": 12,
+      "group": 2
+    },
+    {
+      "cell": 21,
+      "bg": "bg_starmap",
+      "message": "いわの すきまから よぞらが 見えた。\nおおきな ほしの ちずが うかんでいる！\n充実15　友情5",
+      "juujitsu": 15,
+      "yuujou": 5,
+      "group": 2,
+      "item": "ehon"
+    },
+    {
+      "cell": 22,
+      "bg": "bg_island",
+      "message": "たからの しまが 見えてきた。\nでも そらが あやしい…\nどうする？",
+      "group": 3,
+      "choices": [
+        {
+          "label": "いわかげで やりすごす",
+          "bg": "bg_seacave",
+          "message": "あらしが すぎるのを まった。\n満腹-5　充実8　友情4",
+          "manpuku": -5,
+          "juujitsu": 8,
+          "yuujou": 4
+        },
+        {
+          "label": "あらしの なかを すすむ",
+          "bg": "bg_stormbeach",
+          "message": "かみなりの なか はしりぬけた！\n満腹-12　充実22　友情10",
+          "manpuku": -12,
+          "juujitsu": 22,
+          "yuujou": 10
+        }
+      ]
+    },
+    {
+      "cell": 23,
+      "bg": "bg_moontreasure",
+      "message": "つきあかりの なか、\nみんなで たからばこを ほりあてた！\n満腹15　充実20　友情20",
+      "manpuku": 15,
+      "juujitsu": 20,
+      "yuujou": 20,
+      "group": 4,
+      "item": "tegami"
+    },
+    {
+      "cell": 24,
+      "bg": "bg_sailaway",
+      "message": "たからを つんで しゅっぱつ！\n充実15　友情10\n2マス すすむ",
+      "juujitsu": 15,
+      "yuujou": 10,
+      "move": 2,
       "group": 2
     }
   ]
